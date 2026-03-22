@@ -34,7 +34,7 @@ class PlanExercise(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.exercise.name} in {self.plan.name}"
+        return f'{self.exercise.name} in {self.plan.name}'
 
 
 class PlanWeekly(models.Model):
@@ -74,4 +74,4 @@ class PlanWeeklyItem(models.Model):
         ]
 
     def __str__(self):
-        return f"Day {self.day_of_week}: {self.plan.name}"
+        return f'Day {self.day_of_week}: {self.plan.name}'

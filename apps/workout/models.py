@@ -13,7 +13,7 @@ class WorkoutSession(models.Model):
         ]
 
     def __str__(self):
-        return f"Session {self.date}"
+        return f'Session {self.date}'
 
 
 class ExerciseLog(models.Model):
@@ -37,7 +37,7 @@ class ExerciseLog(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.exercise.name} in {self.session}"
+        return f'{self.exercise.name} in {self.session}'
 
 
 class SetLog(models.Model):
@@ -58,4 +58,4 @@ class SetLog(models.Model):
         ]
 
     def __str__(self):
-        return f"Set {self.set_number}: {self.weight}kg x {self.reps}"
+        return f'Set {self.set_number}: {self.weight}kg x {self.reps}'
