@@ -471,7 +471,6 @@ class PlanWeeklyListViewTest(TestCase):
         self.assertEqual(data['data'], [])
 
 
-
 class PlanWeeklyDetailViewTest(TestCase):
     def setUp(self):
         self.plan = Plan.objects.create(name='Push Day', type='PUSH')
@@ -578,16 +577,12 @@ class PlanWeeklyCreateViewTest(TestCase):
             'name': 'PPL Split',
             'items': [{'day_of_week': 1, 'plan_id': self.plan.id}],
         }
-        response = self.client.post(
-            '/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json'
-        )
+        response = self.client.post('/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json')
         self.assertEqual(response.status_code, 201)
 
     def test_create_response_contains_id(self):
         payload = {'name': 'PPL Split'}
-        response = self.client.post(
-            '/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json'
-        )
+        response = self.client.post('/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json')
         data = response.json()
         self.assertIn('id', data['data'])
         self.assertEqual(data['message'], 'success')
@@ -595,9 +590,7 @@ class PlanWeeklyCreateViewTest(TestCase):
     # Negative
     def test_create_plan_weekly_missing_name_400(self):
         payload = {'items': []}
-        response = self.client.post(
-            '/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json'
-        )
+        response = self.client.post('/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json')
         self.assertEqual(response.status_code, 400)
         self.assertIn('error', response.json())
 
@@ -606,7 +599,5 @@ class PlanWeeklyCreateViewTest(TestCase):
             'name': 'Bad Week',
             'items': [{'day_of_week': 1, 'plan_id': 9999}],
         }
-        response = self.client.post(
-            '/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json'
-        )
+        response = self.client.post('/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json')
         self.assertEqual(response.status_code, 400)

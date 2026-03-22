@@ -57,9 +57,7 @@ class PlanWeeklyListView(APIView):
                 {'error': {'code': 'INVALID_REQUEST', 'message': str(e)}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return Response(
-            {'data': {'id': plan_weekly.id}, 'message': 'success'}, status=status.HTTP_201_CREATED
-        )
+        return Response({'data': {'id': plan_weekly.id}, 'message': 'success'}, status=status.HTTP_201_CREATED)
 
 
 class PlanWeeklyDetailView(APIView):
