@@ -10,7 +10,7 @@ from apps.plan.serializers import (
     PlanWeeklyDetailSerializer,
     PlanWeeklyListSerializer,
 )
-from apps.plan.services import create_plan
+from apps.plan.services import create_plan, create_plan_weekly
 
 
 class PlanListView(APIView):
@@ -48,6 +48,18 @@ class PlanWeeklyListView(APIView):
         weeklies = get_all_plan_weeklies()
         serializer = PlanWeeklyListSerializer(weeklies, many=True)
         return Response({'data': serializer.data, 'message': 'success'})
+
+    def post(self, request):
+        try:
+            plan_weekly = create_plan_weekly(request.data)
+        except ValueError as e:
+            return Response(
+                {'error': {'code': 'INVALID_REQUEST', 'message': str(e)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(
+            {'data': {'id': plan_weekly.id}, 'message': 'success'}, status=status.HTTP_201_CREATED
+        )
 
 
 class PlanWeeklyDetailView(APIView):
