@@ -1,8 +1,14 @@
+import json
+
 from django.db import IntegrityError
+from django.db.models import QuerySet
 from django.test import TestCase
 
 from apps.exercise.models import Exercise
 from apps.plan.models import Plan, PlanExercise, PlanWeekly, PlanWeeklyItem
+from apps.plan.selectors import get_all_plans, get_plan_by_id
+from apps.plan.serializers import PlanDetailSerializer, PlanListSerializer
+from apps.plan.services import create_plan
 
 
 class PlanModelTest(TestCase):
@@ -123,3 +129,244 @@ class PlanWeeklyItemModelTest(TestCase):
 
     def test_db_table_name(self):
         self.assertEqual(PlanWeeklyItem._meta.db_table, 'plan_weekly_item')
+
+
+# ── Selector Tests ──────────────────────────────────────────────────
+
+
+class PlanSelectorTest(TestCase):
+    # Positive
+    def test_get_all_plans_returns_queryset(self):
+        result = get_all_plans()
+        self.assertIsInstance(result, QuerySet)
+
+    def test_get_all_plans_returns_all(self):
+        Plan.objects.create(name='Push Day', type='PUSH')
+        Plan.objects.create(name='Pull Day', type='PULL')
+        result = get_all_plans()
+        self.assertEqual(result.count(), 2)
+
+    # Corner
+    def test_get_all_plans_empty(self):
+        result = get_all_plans()
+        self.assertEqual(result.count(), 0)
+
+    # Positive
+    def test_get_plan_by_id_returns_plan(self):
+        plan = Plan.objects.create(name='Push Day', type='PUSH')
+        result = get_plan_by_id(plan.id)
+        self.assertEqual(result.id, plan.id)
+
+    # Negative
+    def test_get_plan_by_id_not_found_raises(self):
+        with self.assertRaises(Plan.DoesNotExist):
+            get_plan_by_id(9999)
+
+
+# ── Service Tests ───────────────────────────────────────────────────
+
+
+class PlanServiceTest(TestCase):
+    def setUp(self):
+        self.exercise1 = Exercise.objects.create(name='Bench Press', category='Push')
+        self.exercise2 = Exercise.objects.create(name='Overhead Press', category='Push')
+
+    # Positive
+    def test_create_plan_basic(self):
+        data = {'name': 'Push Day', 'type': 'PUSH', 'exercises': []}
+        plan = create_plan(data)
+        self.assertEqual(plan.name, 'Push Day')
+        self.assertEqual(plan.type, 'PUSH')
+
+    def test_create_plan_with_exercises(self):
+        data = {
+            'name': 'Push Day',
+            'type': 'PUSH',
+            'exercises': [
+                {'exercise_id': self.exercise1.id, 'target_sets': 3, 'target_reps': 10},
+                {'exercise_id': self.exercise2.id, 'target_sets': 3, 'target_reps': 8},
+            ],
+        }
+        plan = create_plan(data)
+        self.assertEqual(plan.exercises.count(), 2)
+
+    def test_create_plan_without_exercises(self):
+        data = {'name': 'Push Day', 'type': 'PUSH'}
+        plan = create_plan(data)
+        self.assertEqual(plan.exercises.count(), 0)
+
+    def test_create_plan_sets_order_index(self):
+        data = {
+            'name': 'Push Day',
+            'type': 'PUSH',
+            'exercises': [
+                {'exercise_id': self.exercise1.id, 'target_sets': 3, 'target_reps': 10},
+                {'exercise_id': self.exercise2.id, 'target_sets': 3, 'target_reps': 8},
+            ],
+        }
+        plan = create_plan(data)
+        exercises = list(plan.exercises.order_by('order_index'))
+        self.assertEqual(exercises[0].order_index, 0)
+        self.assertEqual(exercises[1].order_index, 1)
+
+    # Negative
+    def test_create_plan_missing_name(self):
+        data = {'type': 'PUSH'}
+        with self.assertRaises(ValueError):
+            create_plan(data)
+
+    def test_create_plan_missing_type(self):
+        data = {'name': 'Push Day'}
+        with self.assertRaises(ValueError):
+            create_plan(data)
+
+    def test_create_plan_invalid_exercise_id(self):
+        data = {
+            'name': 'Push Day',
+            'type': 'PUSH',
+            'exercises': [{'exercise_id': 9999, 'target_sets': 3, 'target_reps': 10}],
+        }
+        with self.assertRaises(ValueError):
+            create_plan(data)
+
+    # Corner
+    def test_create_plan_single_exercise(self):
+        data = {
+            'name': 'Push Day',
+            'type': 'PUSH',
+            'exercises': [{'exercise_id': self.exercise1.id, 'target_sets': 5, 'target_reps': 5}],
+        }
+        plan = create_plan(data)
+        self.assertEqual(plan.exercises.count(), 1)
+
+
+# ── Serializer Tests ────────────────────────────────────────────────
+
+
+class PlanSerializerTest(TestCase):
+    def setUp(self):
+        self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
+        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
+        PlanExercise.objects.create(
+            plan=self.plan, exercise=self.exercise, target_sets=3, target_reps=10, order_index=0
+        )
+
+    # Positive
+    def test_list_serializer_fields(self):
+        data = PlanListSerializer(self.plan).data
+        self.assertEqual(data['id'], self.plan.id)
+        self.assertEqual(data['name'], 'Push Day')
+        self.assertEqual(data['type'], 'PUSH')
+
+    def test_detail_serializer_includes_exercises(self):
+        data = PlanDetailSerializer(self.plan).data
+        self.assertIn('exercises', data)
+        self.assertEqual(len(data['exercises']), 1)
+
+    def test_detail_serializer_exercise_fields(self):
+        data = PlanDetailSerializer(self.plan).data
+        ex = data['exercises'][0]
+        self.assertEqual(ex['exercise_id'], self.exercise.id)
+        self.assertEqual(ex['exercise_name'], 'Bench Press')
+        self.assertEqual(ex['target_sets'], 3)
+        self.assertEqual(ex['target_reps'], 10)
+
+    # Corner
+    def test_detail_serializer_null_targets(self):
+        plan = Plan.objects.create(name='Flex Day', type='FULL_BODY')
+        PlanExercise.objects.create(plan=plan, exercise=self.exercise, order_index=0)
+        data = PlanDetailSerializer(plan).data
+        ex = data['exercises'][0]
+        self.assertIsNone(ex['target_sets'])
+        self.assertIsNone(ex['target_reps'])
+
+
+# ── View Tests ──────────────────────────────────────────────────────
+
+
+class PlanListViewTest(TestCase):
+    # Positive
+    def test_list_plans_200(self):
+        response = self.client.get('/api/v1/plans/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_list_response_format(self):
+        response = self.client.get('/api/v1/plans/')
+        data = response.json()
+        self.assertIn('data', data)
+        self.assertIn('message', data)
+        self.assertEqual(data['message'], 'success')
+
+    # Corner
+    def test_list_plans_empty(self):
+        response = self.client.get('/api/v1/plans/')
+        data = response.json()
+        self.assertEqual(data['data'], [])
+
+    # Negative
+    def test_list_delete_not_allowed_405(self):
+        response = self.client.delete('/api/v1/plans/')
+        self.assertEqual(response.status_code, 405)
+
+
+class PlanCreateViewTest(TestCase):
+    def setUp(self):
+        self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
+
+    # Positive
+    def test_create_plan_201(self):
+        payload = {
+            'name': 'Push Day',
+            'type': 'PUSH',
+            'exercises': [{'exercise_id': self.exercise.id, 'target_sets': 3, 'target_reps': 10}],
+        }
+        response = self.client.post('/api/v1/plans/', data=json.dumps(payload), content_type='application/json')
+        self.assertEqual(response.status_code, 201)
+
+    def test_create_response_contains_id(self):
+        payload = {'name': 'Push Day', 'type': 'PUSH'}
+        response = self.client.post('/api/v1/plans/', data=json.dumps(payload), content_type='application/json')
+        data = response.json()
+        self.assertIn('id', data['data'])
+        self.assertEqual(data['message'], 'success')
+
+    # Negative
+    def test_create_plan_missing_name_400(self):
+        payload = {'type': 'PUSH'}
+        response = self.client.post('/api/v1/plans/', data=json.dumps(payload), content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.json())
+
+    def test_create_plan_missing_type_400(self):
+        payload = {'name': 'Push Day'}
+        response = self.client.post('/api/v1/plans/', data=json.dumps(payload), content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+
+
+class PlanDetailViewTest(TestCase):
+    def setUp(self):
+        self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
+        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
+        PlanExercise.objects.create(
+            plan=self.plan, exercise=self.exercise, target_sets=3, target_reps=10, order_index=0
+        )
+
+    # Positive
+    def test_get_plan_detail_200(self):
+        response = self.client.get(f'/api/v1/plans/{self.plan.id}/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_detail_response_contains_exercises(self):
+        response = self.client.get(f'/api/v1/plans/{self.plan.id}/')
+        data = response.json()['data']
+        self.assertIn('exercises', data)
+        self.assertEqual(len(data['exercises']), 1)
+
+    # Negative
+    def test_get_plan_not_found_404(self):
+        response = self.client.get('/api/v1/plans/9999/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_detail_post_not_allowed_405(self):
+        response = self.client.post(f'/api/v1/plans/{self.plan.id}/')
+        self.assertEqual(response.status_code, 405)
