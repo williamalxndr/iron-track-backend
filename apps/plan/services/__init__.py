@@ -1,7 +1,7 @@
 from django.db import transaction
 
 from apps.exercise.models import Exercise
-from apps.plan.models import Plan, PlanExercise
+from apps.plan.models import Plan, PlanExercise, PlanWeekly, PlanWeeklyItem
 
 
 def create_plan(data):
@@ -36,3 +36,36 @@ def create_plan(data):
             )
 
     return plan
+
+
+def create_plan_weekly(data):
+    name = data.get('name')
+    if not name:
+        raise ValueError('name is required')
+
+    items = data.get('items', [])
+
+    # Validate plan IDs
+    if items:
+        plan_ids = [item['plan_id'] for item in items]
+        existing_ids = set(Plan.objects.filter(id__in=plan_ids).values_list('id', flat=True))
+        for item in items:
+            if item['plan_id'] not in existing_ids:
+                raise ValueError(f'Plan with id {item["plan_id"]} does not exist')
+
+        # Validate day_of_week values
+        for item in items:
+            if item['day_of_week'] < 1 or item['day_of_week'] > 7:
+                raise ValueError(f'day_of_week must be between 1 and 7, got {item["day_of_week"]}')
+
+    with transaction.atomic():
+        plan_weekly = PlanWeekly.objects.create(name=name)
+
+        for item_data in items:
+            PlanWeeklyItem.objects.create(
+                plan_weekly=plan_weekly,
+                plan_id=item_data['plan_id'],
+                day_of_week=item_data['day_of_week'],
+            )
+
+    return plan_weekly
