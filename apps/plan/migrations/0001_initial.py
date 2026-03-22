@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -41,8 +40,20 @@ class Migration(migrations.Migration):
                 ('target_sets', models.IntegerField(blank=True, null=True)),
                 ('target_reps', models.IntegerField(blank=True, null=True)),
                 ('order_index', models.IntegerField(default=0)),
-                ('exercise', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='plan_exercises', to='exercise.exercise')),
-                ('plan', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='exercises', to='plan.plan')),
+                (
+                    'exercise',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='plan_exercises',
+                        to='exercise.exercise',
+                    ),
+                ),
+                (
+                    'plan',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name='exercises', to='plan.plan'
+                    ),
+                ),
             ],
             options={
                 'db_table': 'plan_exercise',
@@ -54,13 +65,30 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('day_of_week', models.IntegerField()),
-                ('plan', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='weekly_items', to='plan.plan')),
-                ('plan_weekly', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='items', to='plan.planweekly')),
+                (
+                    'plan',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name='weekly_items', to='plan.plan'
+                    ),
+                ),
+                (
+                    'plan_weekly',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name='items', to='plan.planweekly'
+                    ),
+                ),
             ],
             options={
                 'db_table': 'plan_weekly_item',
-                'indexes': [models.Index(fields=['plan_weekly'], name='idx_plan_weekly_item_weekly'), models.Index(fields=['day_of_week'], name='idx_plan_weekly_item_day')],
-                'constraints': [models.CheckConstraint(condition=models.Q(('day_of_week__gte', 1), ('day_of_week__lte', 7)), name='chk_day_of_week')],
+                'indexes': [
+                    models.Index(fields=['plan_weekly'], name='idx_plan_weekly_item_weekly'),
+                    models.Index(fields=['day_of_week'], name='idx_plan_weekly_item_day'),
+                ],
+                'constraints': [
+                    models.CheckConstraint(
+                        condition=models.Q(('day_of_week__gte', 1), ('day_of_week__lte', 7)), name='chk_day_of_week'
+                    )
+                ],
             },
         ),
     ]

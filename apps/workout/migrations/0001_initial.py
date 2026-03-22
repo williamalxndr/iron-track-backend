@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -31,8 +30,22 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('order_index', models.IntegerField(default=0)),
-                ('exercise', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='exercise_logs', to='exercise.exercise')),
-                ('session', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='exercise_logs', to='workout.workoutsession')),
+                (
+                    'exercise',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='exercise_logs',
+                        to='exercise.exercise',
+                    ),
+                ),
+                (
+                    'session',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='exercise_logs',
+                        to='workout.workoutsession',
+                    ),
+                ),
             ],
             options={
                 'db_table': 'exercise_log',
@@ -46,7 +59,12 @@ class Migration(migrations.Migration):
                 ('weight', models.FloatField()),
                 ('reps', models.IntegerField()),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('exercise_log', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='sets', to='workout.exerciselog')),
+                (
+                    'exercise_log',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name='sets', to='workout.exerciselog'
+                    ),
+                ),
             ],
             options={
                 'db_table': 'set_log',
