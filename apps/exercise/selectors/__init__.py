@@ -21,10 +21,12 @@ def get_exercise_history(exercise_id):
     history = []
     for log in logs:
         sets = [{'weight': s.weight, 'reps': s.reps} for s in log.sets.order_by('set_number')]
-        history.append({
-            'date': log.session.date,
-            'sets': sets,
-        })
+        history.append(
+            {
+                'date': log.session.date,
+                'sets': sets,
+            }
+        )
     return history
 
 
