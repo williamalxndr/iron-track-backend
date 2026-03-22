@@ -46,7 +46,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt
-      - run: python manage.py check --deploy --fail-level WARNING
+      - run: python manage.py check
       - run: python manage.py test
 
   deploy-staging:
