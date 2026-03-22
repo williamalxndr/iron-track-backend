@@ -30,6 +30,21 @@ class ExerciseModelTest(TestCase):
     def test_db_table_name(self):
         self.assertEqual(Exercise._meta.db_table, 'exercise')
 
+    # image_url tests
+    def test_create_exercise_with_image_url(self):
+        url = 'https://example.supabase.co/storage/v1/object/public/exercises/bench-press.png'
+        exercise = Exercise.objects.create(name='Bench Press', category='Push', image_url=url)
+        self.assertEqual(exercise.image_url, url)
+
+    def test_image_url_is_optional(self):
+        exercise = Exercise.objects.create(name='Deadlift')
+        self.assertIsNone(exercise.image_url)
+
+    def test_image_url_max_length(self):
+        long_url = 'https://example.com/' + 'a' * 475
+        exercise = Exercise.objects.create(name='Squat', image_url=long_url)
+        self.assertEqual(exercise.image_url, long_url)
+
 
 class ExerciseSelectorTest(TestCase):
     # Positive
@@ -72,6 +87,17 @@ class ExerciseSerializerTest(TestCase):
         data = ExerciseSerializer(exercise).data
         self.assertIsNone(data['category'])
 
+    def test_serializes_image_url_field(self):
+        url = 'https://example.supabase.co/storage/v1/object/public/exercises/squat.png'
+        exercise = Exercise.objects.create(name='Squat', category='Legs', image_url=url)
+        data = ExerciseSerializer(exercise).data
+        self.assertEqual(data['image_url'], url)
+
+    def test_serializes_null_image_url(self):
+        exercise = Exercise.objects.create(name='Deadlift')
+        data = ExerciseSerializer(exercise).data
+        self.assertIsNone(data['image_url'])
+
     # Corner
     def test_serializes_multiple_exercises(self):
         Exercise.objects.create(name='Bench Press', category='Push')
@@ -108,6 +134,7 @@ class ExerciseListViewTest(TestCase):
         self.assertIn('id', exercise)
         self.assertIn('name', exercise)
         self.assertIn('category', exercise)
+        self.assertIn('image_url', exercise)
         self.assertIn('created_at', exercise)
 
     # Corner
