@@ -5,7 +5,6 @@ from django.core.management.base import BaseCommand
 from apps.exercise.models import Exercise
 from apps.workout.services import create_session
 
-
 DEMO_SESSIONS = [
     {
         'date_offset': 0,
@@ -58,19 +57,25 @@ class Command(BaseCommand):
                 try:
                     exercise = Exercise.objects.get(name=exercise_name)
                 except Exercise.DoesNotExist:
-                    self.stderr.write(self.style.WARNING(f'Exercise "{exercise_name}" not found — run seed_exercises first'))
+                    self.stderr.write(
+                        self.style.WARNING(f'Exercise "{exercise_name}" not found — run seed_exercises first')
+                    )
                     return
 
-                exercises_payload.append({
-                    'exercise_id': exercise.id,
-                    'sets': [{'weight': w, 'reps': r} for w, r in sets],
-                })
+                exercises_payload.append(
+                    {
+                        'exercise_id': exercise.id,
+                        'sets': [{'weight': w, 'reps': r} for w, r in sets],
+                    }
+                )
 
-            create_session({
-                'date': str(session_date),
-                'notes': session_data['notes'],
-                'exercises': exercises_payload,
-            })
+            create_session(
+                {
+                    'date': str(session_date),
+                    'notes': session_data['notes'],
+                    'exercises': exercises_payload,
+                }
+            )
             created_count += 1
 
         self.stdout.write(self.style.SUCCESS(f'Seeded {created_count} demo sessions'))
