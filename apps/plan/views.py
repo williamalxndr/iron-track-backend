@@ -2,9 +2,14 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.plan.models import Plan
-from apps.plan.selectors import get_all_plans, get_plan_by_id
-from apps.plan.serializers import PlanDetailSerializer, PlanListSerializer
+from apps.plan.models import Plan, PlanWeekly
+from apps.plan.selectors import get_all_plan_weeklies, get_all_plans, get_plan_by_id, get_plan_weekly_by_id
+from apps.plan.serializers import (
+    PlanDetailSerializer,
+    PlanListSerializer,
+    PlanWeeklyDetailSerializer,
+    PlanWeeklyListSerializer,
+)
 from apps.plan.services import create_plan
 
 
@@ -35,4 +40,24 @@ class PlanDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         serializer = PlanDetailSerializer(plan)
+        return Response({'data': serializer.data, 'message': 'success'})
+
+
+class PlanWeeklyListView(APIView):
+    def get(self, request):
+        weeklies = get_all_plan_weeklies()
+        serializer = PlanWeeklyListSerializer(weeklies, many=True)
+        return Response({'data': serializer.data, 'message': 'success'})
+
+
+class PlanWeeklyDetailView(APIView):
+    def get(self, request, pk):
+        try:
+            weekly = get_plan_weekly_by_id(pk)
+        except PlanWeekly.DoesNotExist:
+            return Response(
+                {'error': {'code': 'NOT_FOUND', 'message': 'Weekly plan not found'}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        serializer = PlanWeeklyDetailSerializer(weekly)
         return Response({'data': serializer.data, 'message': 'success'})
