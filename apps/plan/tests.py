@@ -247,7 +247,9 @@ class PlanSerializerTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
         self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-        PlanExercise.objects.create(plan=self.plan, exercise=self.exercise, target_sets=3, target_reps=10, order_index=0)
+        PlanExercise.objects.create(
+            plan=self.plan, exercise=self.exercise, target_sets=3, target_reps=10, order_index=0
+        )
 
     # Positive
     def test_list_serializer_fields(self):
@@ -345,7 +347,9 @@ class PlanDetailViewTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
         self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-        PlanExercise.objects.create(plan=self.plan, exercise=self.exercise, target_sets=3, target_reps=10, order_index=0)
+        PlanExercise.objects.create(
+            plan=self.plan, exercise=self.exercise, target_sets=3, target_reps=10, order_index=0
+        )
 
     # Positive
     def test_get_plan_detail_200(self):
