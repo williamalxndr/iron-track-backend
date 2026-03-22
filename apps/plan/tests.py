@@ -6,8 +6,18 @@ from django.test import TestCase
 
 from apps.exercise.models import Exercise
 from apps.plan.models import Plan, PlanExercise, PlanWeekly, PlanWeeklyItem
-from apps.plan.selectors import get_all_plans, get_plan_by_id
-from apps.plan.serializers import PlanDetailSerializer, PlanListSerializer
+from apps.plan.selectors import (
+    get_all_plan_weeklies,
+    get_all_plans,
+    get_plan_by_id,
+    get_plan_weekly_by_id,
+)
+from apps.plan.serializers import (
+    PlanDetailSerializer,
+    PlanListSerializer,
+    PlanWeeklyDetailSerializer,
+    PlanWeeklyListSerializer,
+)
 from apps.plan.services import create_plan
 
 
@@ -369,4 +379,125 @@ class PlanDetailViewTest(TestCase):
 
     def test_detail_post_not_allowed_405(self):
         response = self.client.post(f'/api/v1/plans/{self.plan.id}/')
+        self.assertEqual(response.status_code, 405)
+
+
+# ── Plan Weekly Selector Tests ─────────────────────────────────────
+
+
+class PlanWeeklySelectorTest(TestCase):
+    # Positive
+    def test_get_all_plan_weeklies_returns_queryset(self):
+        result = get_all_plan_weeklies()
+        self.assertIsInstance(result, QuerySet)
+
+    def test_get_all_plan_weeklies_returns_all(self):
+        PlanWeekly.objects.create(name='PPL')
+        PlanWeekly.objects.create(name='Upper Lower')
+        result = get_all_plan_weeklies()
+        self.assertEqual(result.count(), 2)
+
+    # Corner
+    def test_get_all_plan_weeklies_empty(self):
+        result = get_all_plan_weeklies()
+        self.assertEqual(result.count(), 0)
+
+    # Positive
+    def test_get_plan_weekly_by_id_returns_plan_weekly(self):
+        pw = PlanWeekly.objects.create(name='PPL')
+        result = get_plan_weekly_by_id(pw.id)
+        self.assertEqual(result.id, pw.id)
+
+    # Negative
+    def test_get_plan_weekly_by_id_not_found_raises(self):
+        with self.assertRaises(PlanWeekly.DoesNotExist):
+            get_plan_weekly_by_id(9999)
+
+
+# ── Plan Weekly Serializer Tests ───────────────────────────────────
+
+
+class PlanWeeklySerializerTest(TestCase):
+    def setUp(self):
+        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
+        self.weekly = PlanWeekly.objects.create(name='PPL')
+        PlanWeeklyItem.objects.create(plan_weekly=self.weekly, plan=self.plan, day_of_week=1)
+
+    # Positive
+    def test_list_serializer_fields(self):
+        data = PlanWeeklyListSerializer(self.weekly).data
+        self.assertEqual(data['id'], self.weekly.id)
+        self.assertEqual(data['name'], 'PPL')
+
+    def test_detail_serializer_includes_items(self):
+        data = PlanWeeklyDetailSerializer(self.weekly).data
+        self.assertIn('items', data)
+        self.assertEqual(len(data['items']), 1)
+
+    def test_detail_serializer_item_fields(self):
+        data = PlanWeeklyDetailSerializer(self.weekly).data
+        item = data['items'][0]
+        self.assertEqual(item['day_of_week'], 1)
+        self.assertEqual(item['plan_id'], self.plan.id)
+        self.assertEqual(item['plan_name'], 'Push Day')
+
+    # Corner
+    def test_detail_serializer_no_items(self):
+        empty_weekly = PlanWeekly.objects.create(name='Empty Week')
+        data = PlanWeeklyDetailSerializer(empty_weekly).data
+        self.assertEqual(data['items'], [])
+
+
+# ── Plan Weekly View Tests ─────────────────────────────────────────
+
+
+class PlanWeeklyListViewTest(TestCase):
+    # Positive
+    def test_list_plan_weeklies_200(self):
+        response = self.client.get('/api/v1/plan-weekly/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_list_response_format(self):
+        response = self.client.get('/api/v1/plan-weekly/')
+        data = response.json()
+        self.assertIn('data', data)
+        self.assertIn('message', data)
+        self.assertEqual(data['message'], 'success')
+
+    # Corner
+    def test_list_plan_weeklies_empty(self):
+        response = self.client.get('/api/v1/plan-weekly/')
+        data = response.json()
+        self.assertEqual(data['data'], [])
+
+    # Negative
+    def test_list_post_not_allowed_405(self):
+        response = self.client.post('/api/v1/plan-weekly/')
+        self.assertEqual(response.status_code, 405)
+
+
+class PlanWeeklyDetailViewTest(TestCase):
+    def setUp(self):
+        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
+        self.weekly = PlanWeekly.objects.create(name='PPL')
+        PlanWeeklyItem.objects.create(plan_weekly=self.weekly, plan=self.plan, day_of_week=1)
+
+    # Positive
+    def test_get_plan_weekly_detail_200(self):
+        response = self.client.get(f'/api/v1/plan-weekly/{self.weekly.id}/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_detail_response_contains_items(self):
+        response = self.client.get(f'/api/v1/plan-weekly/{self.weekly.id}/')
+        data = response.json()['data']
+        self.assertIn('items', data)
+        self.assertEqual(len(data['items']), 1)
+
+    # Negative
+    def test_get_plan_weekly_not_found_404(self):
+        response = self.client.get('/api/v1/plan-weekly/9999/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_detail_post_not_allowed_405(self):
+        response = self.client.post(f'/api/v1/plan-weekly/{self.weekly.id}/')
         self.assertEqual(response.status_code, 405)
