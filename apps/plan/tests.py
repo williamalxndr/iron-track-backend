@@ -18,7 +18,7 @@ from apps.plan.serializers import (
     PlanWeeklyDetailSerializer,
     PlanWeeklyListSerializer,
 )
-from apps.plan.services import create_plan
+from apps.plan.services import create_plan, create_plan_weekly
 
 
 class PlanModelTest(TestCase):
@@ -470,10 +470,6 @@ class PlanWeeklyListViewTest(TestCase):
         data = response.json()
         self.assertEqual(data['data'], [])
 
-    # Negative
-    def test_list_post_not_allowed_405(self):
-        response = self.client.post('/api/v1/plan-weekly/')
-        self.assertEqual(response.status_code, 405)
 
 
 class PlanWeeklyDetailViewTest(TestCase):
@@ -501,3 +497,116 @@ class PlanWeeklyDetailViewTest(TestCase):
     def test_detail_post_not_allowed_405(self):
         response = self.client.post(f'/api/v1/plan-weekly/{self.weekly.id}/')
         self.assertEqual(response.status_code, 405)
+
+
+# ── Plan Weekly Service Tests ──────────────────────────────────────
+
+
+class PlanWeeklyServiceTest(TestCase):
+    def setUp(self):
+        self.plan1 = Plan.objects.create(name='Push Day', type='PUSH')
+        self.plan2 = Plan.objects.create(name='Pull Day', type='PULL')
+
+    # Positive
+    def test_create_plan_weekly_basic(self):
+        data = {'name': 'PPL Split'}
+        pw = create_plan_weekly(data)
+        self.assertEqual(pw.name, 'PPL Split')
+        self.assertEqual(pw.items.count(), 0)
+
+    def test_create_plan_weekly_with_items(self):
+        data = {
+            'name': 'PPL Split',
+            'items': [
+                {'day_of_week': 1, 'plan_id': self.plan1.id},
+                {'day_of_week': 2, 'plan_id': self.plan2.id},
+            ],
+        }
+        pw = create_plan_weekly(data)
+        self.assertEqual(pw.name, 'PPL Split')
+        self.assertEqual(pw.items.count(), 2)
+
+    def test_create_plan_weekly_items_created(self):
+        data = {
+            'name': 'PPL Split',
+            'items': [{'day_of_week': 1, 'plan_id': self.plan1.id}],
+        }
+        pw = create_plan_weekly(data)
+        item = pw.items.first()
+        self.assertEqual(item.day_of_week, 1)
+        self.assertEqual(item.plan_id, self.plan1.id)
+
+    # Negative
+    def test_create_plan_weekly_missing_name(self):
+        data = {'items': []}
+        with self.assertRaises(ValueError):
+            create_plan_weekly(data)
+
+    def test_create_plan_weekly_invalid_plan_id(self):
+        data = {
+            'name': 'Bad Week',
+            'items': [{'day_of_week': 1, 'plan_id': 9999}],
+        }
+        with self.assertRaises(ValueError):
+            create_plan_weekly(data)
+
+    def test_create_plan_weekly_invalid_day_of_week(self):
+        data = {
+            'name': 'Bad Week',
+            'items': [{'day_of_week': 8, 'plan_id': self.plan1.id}],
+        }
+        with self.assertRaises(ValueError):
+            create_plan_weekly(data)
+
+    # Corner
+    def test_create_plan_weekly_empty_items(self):
+        data = {'name': 'Empty Week', 'items': []}
+        pw = create_plan_weekly(data)
+        self.assertEqual(pw.items.count(), 0)
+
+
+# ── Plan Weekly Create View Tests ──────────────────────────────────
+
+
+class PlanWeeklyCreateViewTest(TestCase):
+    def setUp(self):
+        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
+
+    # Positive
+    def test_create_plan_weekly_201(self):
+        payload = {
+            'name': 'PPL Split',
+            'items': [{'day_of_week': 1, 'plan_id': self.plan.id}],
+        }
+        response = self.client.post(
+            '/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 201)
+
+    def test_create_response_contains_id(self):
+        payload = {'name': 'PPL Split'}
+        response = self.client.post(
+            '/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json'
+        )
+        data = response.json()
+        self.assertIn('id', data['data'])
+        self.assertEqual(data['message'], 'success')
+
+    # Negative
+    def test_create_plan_weekly_missing_name_400(self):
+        payload = {'items': []}
+        response = self.client.post(
+            '/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.json())
+
+    def test_create_plan_weekly_invalid_plan_id_400(self):
+        payload = {
+            'name': 'Bad Week',
+            'items': [{'day_of_week': 1, 'plan_id': 9999}],
+        }
+        response = self.client.post(
+            '/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)

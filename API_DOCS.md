@@ -567,6 +567,47 @@ Get weekly plan detail with day-plan assignments.
 
 ---
 
+### POST /plan-weekly/
+
+Create a new weekly plan with day-plan assignments.
+
+**Request Body:**
+
+```json
+{
+  "name": "PPL Split",
+  "items": [
+    {"day_of_week": 1, "plan_id": 1},
+    {"day_of_week": 2, "plan_id": 2},
+    {"day_of_week": 3, "plan_id": 3},
+    {"day_of_week": 4, "plan_id": 1},
+    {"day_of_week": 5, "plan_id": 2}
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Weekly plan name |
+| `items` | array | No | Day-plan assignments (default: empty) |
+| `items[].day_of_week` | integer | Yes | Day of week (1=Monday, 7=Sunday) |
+| `items[].plan_id` | integer | Yes | Plan ID to assign to this day |
+
+**Response** `201 Created`
+
+```json
+{
+  "data": {
+    "id": 1
+  },
+  "message": "success"
+}
+```
+
+**Response** `400 Bad Request` — missing name, invalid plan_id, or invalid day_of_week
+
+---
+
 ## 5. Sync (Future)
 
 > These endpoints are planned but **not yet implemented**. Documented here for reference.
@@ -663,6 +704,7 @@ Get all changes since a given timestamp.
 | POST | `/plans/` | Create plan | Planned |
 | GET | `/plans/{id}/` | Plan detail | Planned |
 | GET | `/plan-weekly/` | List weekly plans | Planned |
+| POST | `/plan-weekly/` | Create weekly plan | Planned |
 | GET | `/plan-weekly/{id}/` | Weekly plan detail | Planned |
 | POST | `/sync/batch/` | Batch sync | Future |
 | GET | `/sync/changes/` | Get changes | Future |
