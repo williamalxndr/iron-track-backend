@@ -8,7 +8,7 @@ class SessionListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkoutSession
-        fields = ['id', 'date', 'notes', 'created_at', 'total_volume']
+        fields = ['id', 'date', 'created_at', 'total_volume']
 
 
 class SetLogSerializer(serializers.ModelSerializer):
@@ -32,4 +32,4 @@ class SessionDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkoutSession
-        fields = ['id', 'date', 'notes', 'exercises']
+        fields = ['id', 'date', 'exercises']

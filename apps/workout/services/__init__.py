@@ -31,7 +31,6 @@ def create_session(data):
     with transaction.atomic():
         session = WorkoutSession.objects.create(
             date=date_value,
-            notes=data.get('notes'),
         )
 
         for order_index, ex_data in enumerate(exercises):
@@ -83,7 +82,6 @@ def update_session(session_id, data):
 
     with transaction.atomic():
         session.date = date_value
-        session.notes = data.get('notes')
         session.save()
 
         # Delete old exercise logs (cascades to set logs)

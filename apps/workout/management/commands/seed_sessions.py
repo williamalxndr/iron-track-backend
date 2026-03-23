@@ -3,79 +3,99 @@ from datetime import date, timedelta
 from django.core.management.base import BaseCommand
 
 from apps.exercise.models import Exercise
+from apps.workout.models import WorkoutSession
 from apps.workout.services import create_session
 
-DEMO_SESSIONS = [
-    {
-        'date_offset': 0,
-        'notes': 'Push day — felt strong',
-        'exercises': [
-            ('Bench Press', [(80.0, 8), (85.0, 6), (85.0, 5)]),
-            ('Overhead Press', [(40.0, 10), (42.5, 8), (42.5, 7)]),
-            ('Incline Dumbbell Press', [(30.0, 10), (30.0, 10), (30.0, 8)]),
-            ('Tricep Pushdown', [(25.0, 12), (25.0, 12), (25.0, 10)]),
-            ('Lateral Raise', [(10.0, 15), (10.0, 12)]),
-        ],
-    },
-    {
-        'date_offset': -2,
-        'notes': 'Pull day',
-        'exercises': [
-            ('Deadlift', [(120.0, 5), (130.0, 3), (140.0, 1)]),
-            ('Barbell Row', [(60.0, 10), (65.0, 8), (65.0, 7)]),
-            ('Pull-up', [(0.0, 10), (0.0, 8), (0.0, 6)]),
-            ('Face Pull', [(15.0, 15), (15.0, 15)]),
-            ('Dumbbell Curl', [(12.0, 12), (14.0, 10), (14.0, 8)]),
-        ],
-    },
-    {
-        'date_offset': -4,
-        'notes': 'Leg day',
-        'exercises': [
-            ('Squat', [(100.0, 8), (110.0, 5), (110.0, 5)]),
-            ('Leg Press', [(180.0, 10), (200.0, 8), (200.0, 8)]),
-            ('Romanian Deadlift', [(80.0, 10), (80.0, 10), (80.0, 8)]),
-            ('Leg Curl', [(40.0, 12), (40.0, 12)]),
-            ('Calf Raise', [(60.0, 15), (60.0, 15), (60.0, 12)]),
-        ],
-    },
-]
+# Base weights for week 1 — each week adds a small increment
+PUSH_DAY = {
+    'day_in_week': 0,  # Monday
+    'exercises': [
+        ('Bench Press', 70.0, [(0, 8), (5, 6), (5, 5)]),       # (offset_kg, reps)
+        ('Overhead Press', 35.0, [(0, 10), (2.5, 8), (2.5, 7)]),
+        ('Incline Dumbbell Press', 24.0, [(0, 10), (0, 10), (0, 8)]),
+        ('Tricep Pushdown', 20.0, [(0, 12), (0, 12), (0, 10)]),
+        ('Lateral Raise', 8.0, [(0, 15), (0, 12)]),
+    ],
+}
+
+PULL_DAY = {
+    'day_in_week': 2,  # Wednesday
+    'exercises': [
+        ('Deadlift', 100.0, [(0, 5), (10, 3), (20, 1)]),
+        ('Barbell Row', 50.0, [(0, 10), (5, 8), (5, 7)]),
+        ('Pull-up', 0.0, [(0, 10), (0, 8), (0, 6)]),
+        ('Face Pull', 12.5, [(0, 15), (0, 15)]),
+        ('Dumbbell Curl', 10.0, [(0, 12), (2, 10), (2, 8)]),
+    ],
+}
+
+LEG_DAY = {
+    'day_in_week': 4,  # Friday
+    'exercises': [
+        ('Squat', 80.0, [(0, 8), (10, 5), (10, 5)]),
+        ('Leg Press', 140.0, [(0, 10), (20, 8), (20, 8)]),
+        ('Romanian Deadlift', 60.0, [(0, 10), (0, 10), (0, 8)]),
+        ('Leg Curl', 30.0, [(0, 12), (0, 12)]),
+        ('Calf Raise', 40.0, [(0, 15), (0, 15), (0, 12)]),
+    ],
+}
+
+WEEKLY_TEMPLATES = [PUSH_DAY, PULL_DAY, LEG_DAY]
+NUM_WEEKS = 8
+
+# Weekly weight progression per exercise (kg added per week)
+WEEKLY_INCREMENT = 2.5
 
 
 class Command(BaseCommand):
-    help = 'Seed demo workout sessions (requires exercises to be seeded first)'
+    help = 'Seed 8 weeks of demo workout sessions (requires exercises to be seeded first)'
 
     def handle(self, *args, **options):
         today = date.today()
+        # Start 8 weeks ago (Monday of that week)
+        start_monday = today - timedelta(days=today.weekday()) - timedelta(weeks=NUM_WEEKS - 1)
+
         created_count = 0
 
-        for session_data in DEMO_SESSIONS:
-            session_date = today + timedelta(days=session_data['date_offset'])
+        for week in range(NUM_WEEKS):
+            week_monday = start_monday + timedelta(weeks=week)
+            progression = week * WEEKLY_INCREMENT  # cumulative weight increase
 
-            exercises_payload = []
-            for exercise_name, sets in session_data['exercises']:
-                try:
-                    exercise = Exercise.objects.get(name=exercise_name)
-                except Exercise.DoesNotExist:
-                    self.stderr.write(
-                        self.style.WARNING(f'Exercise "{exercise_name}" not found — run seed_exercises first')
+            for template in WEEKLY_TEMPLATES:
+                session_date = week_monday + timedelta(days=template['day_in_week'])
+                if session_date > today:
+                    continue
+
+                exercises_payload = []
+                for exercise_name, base_weight, sets_template in template['exercises']:
+                    try:
+                        exercise = Exercise.objects.get(name=exercise_name)
+                    except Exercise.DoesNotExist:
+                        self.stderr.write(
+                            self.style.WARNING(
+                                f'Exercise "{exercise_name}" not found — run seed_exercises first'
+                            )
+                        )
+                        return
+
+                    sets = []
+                    for offset_kg, reps in sets_template:
+                        weight = base_weight + offset_kg + progression
+                        sets.append({'weight': round(weight, 1), 'reps': reps})
+
+                    exercises_payload.append(
+                        {
+                            'exercise_id': exercise.id,
+                            'sets': sets,
+                        }
                     )
-                    return
 
-                exercises_payload.append(
+                create_session(
                     {
-                        'exercise_id': exercise.id,
-                        'sets': [{'weight': w, 'reps': r} for w, r in sets],
+                        'date': str(session_date),
+                        'exercises': exercises_payload,
                     }
                 )
+                created_count += 1
 
-            create_session(
-                {
-                    'date': str(session_date),
-                    'notes': session_data['notes'],
-                    'exercises': exercises_payload,
-                }
-            )
-            created_count += 1
-
-        self.stdout.write(self.style.SUCCESS(f'Seeded {created_count} demo sessions'))
+        self.stdout.write(self.style.SUCCESS(f'Seeded {created_count} demo sessions across {NUM_WEEKS} weeks'))

@@ -3,7 +3,6 @@ from django.db import models
 
 class WorkoutSession(models.Model):
     date = models.DateField()
-    notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -22,10 +22,6 @@ class WorkoutSessionModelTest(TestCase):
         with self.assertRaises(IntegrityError):
             WorkoutSession.objects.create(date=None)
 
-    def test_notes_is_optional(self):
-        session = WorkoutSession.objects.create(date=date(2026, 3, 22))
-        self.assertIsNone(session.notes)
-
     def test_str(self):
         session = WorkoutSession.objects.create(date=date(2026, 3, 22))
         self.assertEqual(str(session), 'Session 2026-03-22')
@@ -178,7 +174,6 @@ class SessionServiceTest(TestCase):
     def test_create_session_basic(self):
         data = {
             'date': '2026-03-22',
-            'notes': 'Push day',
             'exercises': [
                 {
                     'exercise_id': self.exercise1.id,
@@ -188,7 +183,6 @@ class SessionServiceTest(TestCase):
         }
         session = create_session(data)
         self.assertEqual(session.date, date(2026, 3, 22))
-        self.assertEqual(session.notes, 'Push day')
 
     def test_create_session_with_exercises_and_sets(self):
         data = {
@@ -208,19 +202,6 @@ class SessionServiceTest(TestCase):
         self.assertEqual(session.exercise_logs.count(), 2)
         first_log = session.exercise_logs.order_by('order_index').first()
         self.assertEqual(first_log.sets.count(), 2)
-
-    def test_create_session_without_notes(self):
-        data = {
-            'date': '2026-03-22',
-            'exercises': [
-                {
-                    'exercise_id': self.exercise1.id,
-                    'sets': [{'weight': 60.0, 'reps': 10}],
-                },
-            ],
-        }
-        session = create_session(data)
-        self.assertIsNone(session.notes)
 
     def test_create_session_sets_order_index(self):
         data = {
@@ -304,7 +285,7 @@ class SessionServiceTest(TestCase):
 class SessionSerializerTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
-        self.session = WorkoutSession.objects.create(date=date(2026, 3, 22), notes='Push day')
+        self.session = WorkoutSession.objects.create(date=date(2026, 3, 22))
         self.log = ExerciseLog.objects.create(session=self.session, exercise=self.exercise, order_index=0)
         SetLog.objects.create(exercise_log=self.log, set_number=1, weight=80.0, reps=8)
         SetLog.objects.create(exercise_log=self.log, set_number=2, weight=80.0, reps=6)
@@ -314,7 +295,6 @@ class SessionSerializerTest(TestCase):
         data = SessionListSerializer(self.session).data
         self.assertEqual(data['id'], self.session.id)
         self.assertEqual(data['date'], '2026-03-22')
-        self.assertEqual(data['notes'], 'Push day')
         self.assertIn('created_at', data)
 
     def test_detail_serializer_includes_exercises(self):
@@ -336,11 +316,6 @@ class SessionSerializerTest(TestCase):
         self.assertEqual(s['reps'], 8)
 
     # Corner
-    def test_detail_serializer_null_notes(self):
-        session = WorkoutSession.objects.create(date=date(2026, 3, 20))
-        data = SessionDetailSerializer(session).data
-        self.assertIsNone(data['notes'])
-
 
 # ── View Tests ──────────────────────────────────────────────────────
 
@@ -434,7 +409,7 @@ class SessionCreateViewTest(TestCase):
 class SessionDetailViewTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
-        self.session = WorkoutSession.objects.create(date=date(2026, 3, 22), notes='Push day')
+        self.session = WorkoutSession.objects.create(date=date(2026, 3, 22))
         log = ExerciseLog.objects.create(session=self.session, exercise=self.exercise, order_index=0)
         SetLog.objects.create(exercise_log=log, set_number=1, weight=80.0, reps=8)
 
@@ -534,7 +509,6 @@ class UpdateSessionServiceTest(TestCase):
         self.session = create_session(
             {
                 'date': '2026-03-22',
-                'notes': 'Original notes',
                 'exercises': [
                     {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
                 ],
@@ -552,19 +526,6 @@ class UpdateSessionServiceTest(TestCase):
             },
         )
         self.assertEqual(session.date, date(2026, 3, 25))
-
-    def test_update_session_changes_notes(self):
-        session = update_session(
-            self.session.id,
-            {
-                'date': '2026-03-22',
-                'notes': 'Updated notes',
-                'exercises': [
-                    {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
-                ],
-            },
-        )
-        self.assertEqual(session.notes, 'Updated notes')
 
     def test_update_session_replaces_exercises(self):
         update_session(
