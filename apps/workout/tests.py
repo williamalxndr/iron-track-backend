@@ -473,12 +473,14 @@ class SessionDetailViewTest(TestCase):
 class DeleteSessionServiceTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
-        self.session = create_session({
-            'date': '2026-03-22',
-            'exercises': [
-                {'exercise_id': self.exercise.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
-            ],
-        })
+        self.session = create_session(
+            {
+                'date': '2026-03-22',
+                'exercises': [
+                    {'exercise_id': self.exercise.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+                ],
+            }
+        )
 
     def test_delete_session_removes_session(self):
         delete_session(self.session.id)
@@ -500,12 +502,14 @@ class DeleteSessionServiceTest(TestCase):
 class DeleteSessionViewTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
-        self.session = create_session({
-            'date': '2026-03-22',
-            'exercises': [
-                {'exercise_id': self.exercise.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
-            ],
-        })
+        self.session = create_session(
+            {
+                'date': '2026-03-22',
+                'exercises': [
+                    {'exercise_id': self.exercise.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+                ],
+            }
+        )
 
     def test_delete_session_204(self):
         response = self.client.delete(f'/api/v1/sessions/{self.session.id}/')
@@ -527,85 +531,110 @@ class UpdateSessionServiceTest(TestCase):
     def setUp(self):
         self.exercise1 = Exercise.objects.create(name='Bench Press', category='Push')
         self.exercise2 = Exercise.objects.create(name='Overhead Press', category='Push')
-        self.session = create_session({
-            'date': '2026-03-22',
-            'notes': 'Original notes',
-            'exercises': [
-                {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
-            ],
-        })
+        self.session = create_session(
+            {
+                'date': '2026-03-22',
+                'notes': 'Original notes',
+                'exercises': [
+                    {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+                ],
+            }
+        )
 
     def test_update_session_changes_date(self):
-        session = update_session(self.session.id, {
-            'date': '2026-03-25',
-            'exercises': [
-                {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
-            ],
-        })
+        session = update_session(
+            self.session.id,
+            {
+                'date': '2026-03-25',
+                'exercises': [
+                    {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+                ],
+            },
+        )
         self.assertEqual(session.date, date(2026, 3, 25))
 
     def test_update_session_changes_notes(self):
-        session = update_session(self.session.id, {
-            'date': '2026-03-22',
-            'notes': 'Updated notes',
-            'exercises': [
-                {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
-            ],
-        })
+        session = update_session(
+            self.session.id,
+            {
+                'date': '2026-03-22',
+                'notes': 'Updated notes',
+                'exercises': [
+                    {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+                ],
+            },
+        )
         self.assertEqual(session.notes, 'Updated notes')
 
     def test_update_session_replaces_exercises(self):
-        update_session(self.session.id, {
-            'date': '2026-03-22',
-            'exercises': [
-                {'exercise_id': self.exercise2.id, 'sets': [{'weight': 40.0, 'reps': 10}]},
-            ],
-        })
+        update_session(
+            self.session.id,
+            {
+                'date': '2026-03-22',
+                'exercises': [
+                    {'exercise_id': self.exercise2.id, 'sets': [{'weight': 40.0, 'reps': 10}]},
+                ],
+            },
+        )
         logs = ExerciseLog.objects.filter(session=self.session)
         self.assertEqual(logs.count(), 1)
         self.assertEqual(logs.first().exercise_id, self.exercise2.id)
 
     def test_update_session_replaces_sets(self):
-        update_session(self.session.id, {
-            'date': '2026-03-22',
-            'exercises': [
-                {'exercise_id': self.exercise1.id, 'sets': [
-                    {'weight': 85.0, 'reps': 6},
-                    {'weight': 85.0, 'reps': 5},
-                ]},
-            ],
-        })
+        update_session(
+            self.session.id,
+            {
+                'date': '2026-03-22',
+                'exercises': [
+                    {
+                        'exercise_id': self.exercise1.id,
+                        'sets': [
+                            {'weight': 85.0, 'reps': 6},
+                            {'weight': 85.0, 'reps': 5},
+                        ],
+                    },
+                ],
+            },
+        )
         log = ExerciseLog.objects.filter(session=self.session).first()
         self.assertEqual(log.sets.count(), 2)
 
     def test_update_session_not_found_raises(self):
         with self.assertRaises(WorkoutSession.DoesNotExist):
-            update_session(9999, {
-                'date': '2026-03-22',
-                'exercises': [
-                    {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
-                ],
-            })
+            update_session(
+                9999,
+                {
+                    'date': '2026-03-22',
+                    'exercises': [
+                        {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+                    ],
+                },
+            )
 
     def test_update_session_invalid_exercise_raises(self):
         with self.assertRaises(ValueError):
-            update_session(self.session.id, {
-                'date': '2026-03-22',
-                'exercises': [
-                    {'exercise_id': 9999, 'sets': [{'weight': 80.0, 'reps': 8}]},
-                ],
-            })
+            update_session(
+                self.session.id,
+                {
+                    'date': '2026-03-22',
+                    'exercises': [
+                        {'exercise_id': 9999, 'sets': [{'weight': 80.0, 'reps': 8}]},
+                    ],
+                },
+            )
 
 
 class UpdateSessionViewTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
-        self.session = create_session({
-            'date': '2026-03-22',
-            'exercises': [
-                {'exercise_id': self.exercise.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
-            ],
-        })
+        self.session = create_session(
+            {
+                'date': '2026-03-22',
+                'exercises': [
+                    {'exercise_id': self.exercise.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+                ],
+            }
+        )
 
     def test_update_session_200(self):
         payload = {
