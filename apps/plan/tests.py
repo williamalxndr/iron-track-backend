@@ -52,18 +52,9 @@ class PlanExerciseModelTest(TestCase):
         pe = PlanExercise.objects.create(
             plan=self.plan,
             exercise=self.exercise,
-            target_sets=3,
-            target_reps=10,
         )
         self.assertEqual(pe.plan, self.plan)
         self.assertEqual(pe.exercise, self.exercise)
-        self.assertEqual(pe.target_sets, 3)
-        self.assertEqual(pe.target_reps, 10)
-
-    def test_target_sets_and_reps_optional(self):
-        pe = PlanExercise.objects.create(plan=self.plan, exercise=self.exercise)
-        self.assertIsNone(pe.target_sets)
-        self.assertIsNone(pe.target_reps)
 
     def test_order_index_default(self):
         pe = PlanExercise.objects.create(plan=self.plan, exercise=self.exercise)
@@ -193,8 +184,8 @@ class PlanServiceTest(TestCase):
             'name': 'Push Day',
             'type': 'PUSH',
             'exercises': [
-                {'exercise_id': self.exercise1.id, 'target_sets': 3, 'target_reps': 10},
-                {'exercise_id': self.exercise2.id, 'target_sets': 3, 'target_reps': 8},
+                {'exercise_id': self.exercise1.id},
+                {'exercise_id': self.exercise2.id},
             ],
         }
         plan = create_plan(data)
@@ -210,8 +201,8 @@ class PlanServiceTest(TestCase):
             'name': 'Push Day',
             'type': 'PUSH',
             'exercises': [
-                {'exercise_id': self.exercise1.id, 'target_sets': 3, 'target_reps': 10},
-                {'exercise_id': self.exercise2.id, 'target_sets': 3, 'target_reps': 8},
+                {'exercise_id': self.exercise1.id},
+                {'exercise_id': self.exercise2.id},
             ],
         }
         plan = create_plan(data)
@@ -234,7 +225,7 @@ class PlanServiceTest(TestCase):
         data = {
             'name': 'Push Day',
             'type': 'PUSH',
-            'exercises': [{'exercise_id': 9999, 'target_sets': 3, 'target_reps': 10}],
+            'exercises': [{'exercise_id': 9999}],
         }
         with self.assertRaises(ValueError):
             create_plan(data)
@@ -244,7 +235,7 @@ class PlanServiceTest(TestCase):
         data = {
             'name': 'Push Day',
             'type': 'PUSH',
-            'exercises': [{'exercise_id': self.exercise1.id, 'target_sets': 5, 'target_reps': 5}],
+            'exercises': [{'exercise_id': self.exercise1.id}],
         }
         plan = create_plan(data)
         self.assertEqual(plan.exercises.count(), 1)
@@ -258,7 +249,7 @@ class PlanSerializerTest(TestCase):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
         self.plan = Plan.objects.create(name='Push Day', type='PUSH')
         PlanExercise.objects.create(
-            plan=self.plan, exercise=self.exercise, target_sets=3, target_reps=10, order_index=0
+            plan=self.plan, exercise=self.exercise, order_index=0
         )
 
     # Positive
@@ -278,17 +269,6 @@ class PlanSerializerTest(TestCase):
         ex = data['exercises'][0]
         self.assertEqual(ex['exercise_id'], self.exercise.id)
         self.assertEqual(ex['exercise_name'], 'Bench Press')
-        self.assertEqual(ex['target_sets'], 3)
-        self.assertEqual(ex['target_reps'], 10)
-
-    # Corner
-    def test_detail_serializer_null_targets(self):
-        plan = Plan.objects.create(name='Flex Day', type='FULL_BODY')
-        PlanExercise.objects.create(plan=plan, exercise=self.exercise, order_index=0)
-        data = PlanDetailSerializer(plan).data
-        ex = data['exercises'][0]
-        self.assertIsNone(ex['target_sets'])
-        self.assertIsNone(ex['target_reps'])
 
 
 # ── View Tests ──────────────────────────────────────────────────────
@@ -328,7 +308,7 @@ class PlanCreateViewTest(TestCase):
         payload = {
             'name': 'Push Day',
             'type': 'PUSH',
-            'exercises': [{'exercise_id': self.exercise.id, 'target_sets': 3, 'target_reps': 10}],
+            'exercises': [{'exercise_id': self.exercise.id}],
         }
         response = self.client.post('/api/v1/plans/', data=json.dumps(payload), content_type='application/json')
         self.assertEqual(response.status_code, 201)
@@ -358,7 +338,7 @@ class PlanDetailViewTest(TestCase):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
         self.plan = Plan.objects.create(name='Push Day', type='PUSH')
         PlanExercise.objects.create(
-            plan=self.plan, exercise=self.exercise, target_sets=3, target_reps=10, order_index=0
+            plan=self.plan, exercise=self.exercise, order_index=0
         )
 
     # Positive

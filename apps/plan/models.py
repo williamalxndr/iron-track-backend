@@ -23,8 +23,6 @@ class PlanExercise(models.Model):
         on_delete=models.CASCADE,
         related_name='plan_exercises',
     )
-    target_sets = models.IntegerField(null=True, blank=True)
-    target_reps = models.IntegerField(null=True, blank=True)
     order_index = models.IntegerField(default=0)
 
     class Meta:

@@ -420,14 +420,10 @@ Create a new workout plan with exercises.
   "type": "PUSH",
   "exercises": [
     {
-      "exercise_id": 1,
-      "target_sets": 3,
-      "target_reps": 10
+      "exercise_id": 1
     },
     {
-      "exercise_id": 3,
-      "target_sets": 3,
-      "target_reps": 8
+      "exercise_id": 3
     }
   ]
 }
@@ -439,8 +435,6 @@ Create a new workout plan with exercises.
 | `type` | string | Yes | Plan type (`PUSH`, `PULL`, `LEG`, `FULL_BODY`) |
 | `exercises` | array | No | Exercises in the plan |
 | `exercises[].exercise_id` | integer | Yes | Reference to exercise |
-| `exercises[].target_sets` | integer | No | Target number of sets |
-| `exercises[].target_reps` | integer | No | Target number of reps |
 
 **Response** `201 Created`
 
@@ -487,15 +481,11 @@ Get plan detail with exercises and targets.
     "exercises": [
       {
         "exercise_id": 1,
-        "exercise_name": "Bench Press",
-        "target_sets": 3,
-        "target_reps": 10
+        "exercise_name": "Bench Press"
       },
       {
         "exercise_id": 3,
-        "exercise_name": "Overhead Press",
-        "target_sets": 3,
-        "target_reps": 8
+        "exercise_name": "Overhead Press"
       }
     ]
   },
@@ -511,8 +501,6 @@ Get plan detail with exercises and targets.
 | `exercises` | array | Exercises in order |
 | `exercises[].exercise_id` | integer | Exercise ID |
 | `exercises[].exercise_name` | string | Exercise name |
-| `exercises[].target_sets` | integer \| null | Target sets |
-| `exercises[].target_reps` | integer \| null | Target reps |
 
 **Response** `404 Not Found` — plan does not exist
 

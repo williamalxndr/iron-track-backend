@@ -30,8 +30,6 @@ def create_plan(data):
             PlanExercise.objects.create(
                 plan=plan,
                 exercise_id=ex_data['exercise_id'],
-                target_sets=ex_data.get('target_sets'),
-                target_reps=ex_data.get('target_reps'),
                 order_index=order_index,
             )
 
