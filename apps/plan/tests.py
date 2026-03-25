@@ -18,7 +18,7 @@ from apps.plan.serializers import (
     PlanWeeklyDetailSerializer,
     PlanWeeklyListSerializer,
 )
-from apps.plan.services import create_plan, create_plan_weekly
+from apps.plan.services import create_plan, create_plan_weekly, delete_plan, update_plan
 
 
 class PlanModelTest(TestCase):
@@ -360,6 +360,104 @@ class PlanDetailViewTest(TestCase):
     def test_detail_post_not_allowed_405(self):
         response = self.client.post(f'/api/v1/plans/{self.plan.id}/')
         self.assertEqual(response.status_code, 405)
+
+
+# ── Update Plan Tests ──────────────────────────────────────────────
+
+
+class UpdatePlanServiceTest(TestCase):
+    def setUp(self):
+        self.exercise1 = Exercise.objects.create(name='Bench Press', category='Chest')
+        self.exercise2 = Exercise.objects.create(name='Overhead Press', category='Shoulders')
+        self.plan = create_plan({
+            'name': 'Push Day',
+            'type': 'PUSH',
+            'exercises': [{'exercise_id': self.exercise1.id}],
+        })
+
+    def test_update_plan_name_and_type(self):
+        plan = update_plan(self.plan.id, {
+            'name': 'Pull Day',
+            'type': 'PULL',
+            'exercises': [{'exercise_id': self.exercise1.id}],
+        })
+        self.assertEqual(plan.name, 'Pull Day')
+        self.assertEqual(plan.type, 'PULL')
+
+    def test_update_plan_replaces_exercises(self):
+        plan = update_plan(self.plan.id, {
+            'name': 'Push Day',
+            'type': 'PUSH',
+            'exercises': [{'exercise_id': self.exercise2.id}],
+        })
+        exercises = list(plan.exercises.all())
+        self.assertEqual(len(exercises), 1)
+        self.assertEqual(exercises[0].exercise_id, self.exercise2.id)
+
+    def test_update_plan_not_found(self):
+        with self.assertRaises(Plan.DoesNotExist):
+            update_plan(9999, {'name': 'X', 'type': 'PUSH', 'exercises': []})
+
+    def test_update_plan_missing_name(self):
+        with self.assertRaises(ValueError):
+            update_plan(self.plan.id, {'type': 'PUSH', 'exercises': []})
+
+    def test_update_plan_invalid_exercise(self):
+        with self.assertRaises(ValueError):
+            update_plan(self.plan.id, {
+                'name': 'Push Day',
+                'type': 'PUSH',
+                'exercises': [{'exercise_id': 9999}],
+            })
+
+
+class DeletePlanServiceTest(TestCase):
+    def setUp(self):
+        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
+
+    def test_delete_plan(self):
+        delete_plan(self.plan.id)
+        self.assertFalse(Plan.objects.filter(id=self.plan.id).exists())
+
+    def test_delete_plan_not_found(self):
+        with self.assertRaises(Plan.DoesNotExist):
+            delete_plan(9999)
+
+
+class UpdatePlanViewTest(TestCase):
+    def setUp(self):
+        self.exercise = Exercise.objects.create(name='Bench Press', category='Chest')
+        self.plan = create_plan({
+            'name': 'Push Day',
+            'type': 'PUSH',
+            'exercises': [{'exercise_id': self.exercise.id}],
+        })
+
+    def test_update_plan_200(self):
+        payload = {'name': 'Pull Day', 'type': 'PULL', 'exercises': []}
+        response = self.client.put(
+            f'/api/v1/plans/{self.plan.id}/',
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_update_plan_not_found_404(self):
+        payload = {'name': 'X', 'type': 'PUSH', 'exercises': []}
+        response = self.client.put(
+            '/api/v1/plans/9999/',
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_plan_204(self):
+        response = self.client.delete(f'/api/v1/plans/{self.plan.id}/')
+        self.assertEqual(response.status_code, 204)
+
+    def test_delete_plan_not_found_404(self):
+        response = self.client.delete('/api/v1/plans/9999/')
+        self.assertEqual(response.status_code, 404)
 
 
 # ── Plan Weekly Selector Tests ─────────────────────────────────────

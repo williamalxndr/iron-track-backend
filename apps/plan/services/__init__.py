@@ -36,6 +36,54 @@ def create_plan(data):
     return plan
 
 
+def update_plan(plan_id, data):
+    try:
+        plan = Plan.objects.get(id=plan_id)
+    except Plan.DoesNotExist:
+        raise Plan.DoesNotExist
+
+    name = data.get('name')
+    if not name:
+        raise ValueError('name is required')
+
+    plan_type = data.get('type')
+    if not plan_type:
+        raise ValueError('type is required')
+
+    exercises = data.get('exercises', [])
+
+    if exercises:
+        exercise_ids = [e['exercise_id'] for e in exercises]
+        existing_ids = set(Exercise.objects.filter(id__in=exercise_ids).values_list('id', flat=True))
+        for ex in exercises:
+            if ex['exercise_id'] not in existing_ids:
+                raise ValueError(f'Exercise with id {ex["exercise_id"]} does not exist')
+
+    with transaction.atomic():
+        plan.name = name
+        plan.type = plan_type
+        plan.save()
+
+        plan.exercises.all().delete()
+
+        for order_index, ex_data in enumerate(exercises):
+            PlanExercise.objects.create(
+                plan=plan,
+                exercise_id=ex_data['exercise_id'],
+                order_index=order_index,
+            )
+
+    return plan
+
+
+def delete_plan(plan_id):
+    try:
+        plan = Plan.objects.get(id=plan_id)
+    except Plan.DoesNotExist:
+        raise Plan.DoesNotExist
+    plan.delete()
+
+
 def create_plan_weekly(data):
     name = data.get('name')
     if not name:

@@ -10,7 +10,7 @@ from apps.plan.serializers import (
     PlanWeeklyDetailSerializer,
     PlanWeeklyListSerializer,
 )
-from apps.plan.services import create_plan, create_plan_weekly
+from apps.plan.services import create_plan, create_plan_weekly, delete_plan, update_plan
 
 
 class PlanListView(APIView):
@@ -41,6 +41,31 @@ class PlanDetailView(APIView):
             )
         serializer = PlanDetailSerializer(plan)
         return Response({'data': serializer.data, 'message': 'success'})
+
+    def put(self, request, pk):
+        try:
+            plan = update_plan(pk, request.data)
+        except Plan.DoesNotExist:
+            return Response(
+                {'error': {'code': 'NOT_FOUND', 'message': 'Plan not found'}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except ValueError as e:
+            return Response(
+                {'error': {'code': 'INVALID_REQUEST', 'message': str(e)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({'data': {'id': plan.id}, 'message': 'success'})
+
+    def delete(self, request, pk):
+        try:
+            delete_plan(pk)
+        except Plan.DoesNotExist:
+            return Response(
+                {'error': {'code': 'NOT_FOUND', 'message': 'Plan not found'}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class PlanWeeklyListView(APIView):
