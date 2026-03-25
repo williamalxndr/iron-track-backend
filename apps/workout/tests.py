@@ -8,7 +8,7 @@ from django.test import TestCase
 from apps.exercise.models import Exercise
 from apps.plan.models import Plan
 from apps.workout.models import ExerciseLog, SetLog, WorkoutSession
-from apps.workout.selectors import get_all_sessions, get_session_by_id
+from apps.workout.selectors import get_all_sessions, get_dashboard_stats, get_session_by_id
 from apps.workout.serializers import SessionDetailSerializer, SessionListSerializer
 from apps.workout.services import create_session, delete_session, update_session
 
@@ -730,3 +730,80 @@ class UpdateSessionViewTest(TestCase):
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 400)
+
+
+# ── Dashboard Tests ────────────────────────────────────────────────
+
+
+class DashboardSelectorTest(TestCase):
+    def setUp(self):
+        self.exercise1 = Exercise.objects.create(name='Bench Press', category='Chest')
+        self.exercise2 = Exercise.objects.create(name='Barbell Row', category='Back')
+        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
+
+        session = WorkoutSession.objects.create(date=date.today(), plan=self.plan)
+        log1 = ExerciseLog.objects.create(session=session, exercise=self.exercise1)
+        SetLog.objects.create(exercise_log=log1, weight=80.0, reps=10)
+        log2 = ExerciseLog.objects.create(session=session, exercise=self.exercise2)
+        SetLog.objects.create(exercise_log=log2, weight=60.0, reps=10)
+
+    def test_total_volume(self):
+        stats = get_dashboard_stats('1M')
+        self.assertEqual(stats['total_volume'], 80 * 10 + 60 * 10)
+
+    def test_session_count(self):
+        stats = get_dashboard_stats('1M')
+        self.assertEqual(stats['session_count'], 1)
+
+    def test_volume_by_category(self):
+        stats = get_dashboard_stats('1M')
+        cats = {c['category']: c['volume'] for c in stats['volume_by_category']}
+        self.assertEqual(cats['Chest'], 800.0)
+        self.assertEqual(cats['Back'], 600.0)
+
+    def test_avg_volume_by_plan_type(self):
+        stats = get_dashboard_stats('1M')
+        types = {t['plan_type']: t['avg_volume'] for t in stats['avg_volume_by_plan_type']}
+        self.assertEqual(types['PUSH'], 1400.0)
+
+    def test_weekly_volume(self):
+        stats = get_dashboard_stats('1M')
+        self.assertGreaterEqual(len(stats['weekly_volume']), 1)
+        self.assertEqual(stats['weekly_volume'][0]['volume'], 1400.0)
+
+    def test_no_sessions(self):
+        WorkoutSession.objects.all().delete()
+        stats = get_dashboard_stats('1M')
+        self.assertEqual(stats['total_volume'], 0)
+        self.assertEqual(stats['session_count'], 0)
+        self.assertEqual(stats['volume_by_category'], [])
+        self.assertEqual(stats['weekly_volume'], [])
+
+
+class DashboardViewTest(TestCase):
+    def test_dashboard_200(self):
+        response = self.client.get('/api/v1/sessions/dashboard/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_dashboard_default_timespan(self):
+        response = self.client.get('/api/v1/sessions/dashboard/')
+        data = response.json()
+        self.assertIn('data', data)
+        self.assertIn('total_volume', data['data'])
+
+    def test_dashboard_with_timespan(self):
+        response = self.client.get('/api/v1/sessions/dashboard/?timespan=3M')
+        self.assertEqual(response.status_code, 200)
+
+    def test_dashboard_invalid_timespan_400(self):
+        response = self.client.get('/api/v1/sessions/dashboard/?timespan=6M')
+        self.assertEqual(response.status_code, 400)
+
+    def test_dashboard_response_shape(self):
+        response = self.client.get('/api/v1/sessions/dashboard/?timespan=1W')
+        data = response.json()['data']
+        self.assertIn('volume_by_category', data)
+        self.assertIn('total_volume', data)
+        self.assertIn('session_count', data)
+        self.assertIn('avg_volume_by_plan_type', data)
+        self.assertIn('weekly_volume', data)
