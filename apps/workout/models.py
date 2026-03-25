@@ -3,6 +3,13 @@ from django.db import models
 
 class WorkoutSession(models.Model):
     date = models.DateField()
+    plan = models.ForeignKey(
+        'plan.Plan',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sessions',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

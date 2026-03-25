@@ -6,6 +6,7 @@ from django.db.models import QuerySet
 from django.test import TestCase
 
 from apps.exercise.models import Exercise
+from apps.plan.models import Plan
 from apps.workout.models import ExerciseLog, SetLog, WorkoutSession
 from apps.workout.selectors import get_all_sessions, get_session_by_id
 from apps.workout.serializers import SessionDetailSerializer, SessionListSerializer
@@ -256,6 +257,17 @@ class SessionServiceTest(TestCase):
         with self.assertRaises(ValueError):
             create_session(data)
 
+    def test_create_session_invalid_plan_id(self):
+        data = {
+            'date': '2026-03-22',
+            'plan_id': 9999,
+            'exercises': [
+                {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+            ],
+        }
+        with self.assertRaises(ValueError):
+            create_session(data)
+
     def test_create_session_empty_sets(self):
         data = {
             'date': '2026-03-22',
@@ -277,6 +289,18 @@ class SessionServiceTest(TestCase):
         session = create_session(data)
         self.assertEqual(session.exercise_logs.count(), 1)
         self.assertEqual(session.exercise_logs.first().sets.count(), 1)
+
+    def test_create_session_with_plan(self):
+        plan = Plan.objects.create(name='Push Day', type='PUSH')
+        data = {
+            'date': '2026-03-22',
+            'plan_id': plan.id,
+            'exercises': [
+                {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+            ],
+        }
+        session = create_session(data)
+        self.assertEqual(session.plan, plan)
 
 
 # ── Serializer Tests ────────────────────────────────────────────────
@@ -314,6 +338,17 @@ class SessionSerializerTest(TestCase):
         s = data['exercises'][0]['sets'][0]
         self.assertEqual(s['weight'], 80.0)
         self.assertEqual(s['reps'], 8)
+
+    def test_serializer_includes_plan_id(self):
+        plan = Plan.objects.create(name='Push Day', type='PUSH')
+        self.session.plan = plan
+        self.session.save()
+        
+        list_data = SessionListSerializer(self.session).data
+        self.assertEqual(list_data.get('plan_id'), plan.id)
+        
+        detail_data = SessionDetailSerializer(self.session).data
+        self.assertEqual(detail_data.get('plan_id'), plan.id)
 
     # Corner
 
@@ -583,6 +618,48 @@ class UpdateSessionServiceTest(TestCase):
                     ],
                 },
             )
+
+    def test_update_session_adds_plan(self):
+        plan = Plan.objects.create(name='Pull Day', type='PULL')
+        session = update_session(
+            self.session.id,
+            {
+                'date': '2026-03-22',
+                'plan_id': plan.id,
+                'exercises': [
+                    {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+                ],
+            },
+        )
+        self.assertEqual(session.plan, plan)
+
+    def test_update_session_removes_plan(self):
+        plan = Plan.objects.create(name='Push Day', type='PUSH')
+        self.session.plan = plan
+        self.session.save()
+        
+        session = update_session(
+            self.session.id,
+            {
+                'date': '2026-03-22',
+                'plan_id': None,
+                'exercises': [
+                    {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+                ],
+            },
+        )
+        self.assertIsNone(session.plan)
+
+    def test_delete_plan_sets_session_plan_to_null_not_cascade(self):
+        plan = Plan.objects.create(name='Push Day', type='PUSH')
+        self.session.plan = plan
+        self.session.save()
+        
+        plan.delete()
+        
+        self.session.refresh_from_db()
+        self.assertIsNone(self.session.plan)
+        self.assertTrue(WorkoutSession.objects.filter(id=self.session.id).exists())
 
 
 class UpdateSessionViewTest(TestCase):
