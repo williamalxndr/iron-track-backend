@@ -1,10 +1,10 @@
 from datetime import date as date_type
 
-from django.db import transaction
+from django.db import transaction  # type: ignore
 
-from apps.exercise.models import Exercise
-from apps.plan.models import Plan
-from apps.workout.models import ExerciseLog, SetLog, WorkoutSession
+from apps.exercise.models import Exercise  # type: ignore
+from apps.plan.models import Plan  # type: ignore
+from apps.workout.models import ExerciseLog, SetLog, WorkoutSession  # type: ignore
 
 
 def create_session(data):

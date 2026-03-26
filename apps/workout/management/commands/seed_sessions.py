@@ -1,12 +1,22 @@
 from datetime import date, timedelta
+from typing import List, Tuple, TypedDict, cast
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand  # type: ignore
 
-from apps.exercise.models import Exercise
-from apps.workout.services import create_session
+from apps.exercise.models import Exercise  # type: ignore
+from apps.workout.services import create_session  # type: ignore
+
+class ExerciseTemplate(TypedDict):
+    name: str
+    base_weight: float
+    sets: List[Tuple[float, int]]
+
+class DayTemplate(TypedDict):
+    day_in_week: int
+    exercises: List[Tuple[str, float, List[Tuple[float, int]]]]
 
 # Base weights for week 1 — each week adds a small increment
-PUSH_DAY = {
+PUSH_DAY: DayTemplate = {
     'day_in_week': 0,  # Monday
     'exercises': [
         ('Bench Press', 70.0, [(0, 8), (5, 6), (5, 5)]),       # (offset_kg, reps)
@@ -17,7 +27,7 @@ PUSH_DAY = {
     ],
 }
 
-PULL_DAY = {
+PULL_DAY: DayTemplate = {
     'day_in_week': 2,  # Wednesday
     'exercises': [
         ('Deadlift', 100.0, [(0, 5), (10, 3), (20, 1)]),
@@ -28,7 +38,7 @@ PULL_DAY = {
     ],
 }
 
-LEG_DAY = {
+LEG_DAY: DayTemplate = {
     'day_in_week': 4,  # Friday
     'exercises': [
         ('Squat', 80.0, [(0, 8), (10, 5), (10, 5)]),
@@ -39,7 +49,7 @@ LEG_DAY = {
     ],
 }
 
-WEEKLY_TEMPLATES = [PUSH_DAY, PULL_DAY, LEG_DAY]
+WEEKLY_TEMPLATES: List[DayTemplate] = [PUSH_DAY, PULL_DAY, LEG_DAY]
 NUM_WEEKS = 8
 
 # Weekly weight progression per exercise (kg added per week)
@@ -65,14 +75,15 @@ class Command(BaseCommand):
 
             for template in WEEKLY_TEMPLATES:
                 day_offset = int(template['day_in_week'])
-                session_date = week_monday + timedelta(days=day_offset)
+                session_date: date = week_monday + timedelta(days=day_offset)
                 
                 if session_date > today:
                     continue
 
                 exercises_payload = []
                 exercises_in_template = template['exercises']
-                for exercise_name, base_weight, sets_template in exercises_in_template:
+                for exercise_item in exercises_in_template:
+                    exercise_name, base_weight, sets_template = exercise_item
                     try:
                         exercise = Exercise.objects.get(name=exercise_name)
                     except Exercise.DoesNotExist:
@@ -86,7 +97,8 @@ class Command(BaseCommand):
                     sets = []
                     for offset_kg, reps in sets_template:
                         weight = float(base_weight) + float(offset_kg) + progression
-                        sets.append({'weight': round(weight, 1), 'reps': int(reps)})
+                        # round() with ndigits is standard, but IDE is confused
+                        sets.append({'weight': round(weight, 1), 'reps': int(reps)})  # type: ignore
 
                     exercises_payload.append(
                         {
