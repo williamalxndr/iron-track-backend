@@ -1,16 +1,16 @@
 import json
 from datetime import date
 
-from django.db import IntegrityError
-from django.db.models import QuerySet
-from django.test import TestCase
+from django.db import IntegrityError  # type: ignore
+from django.db.models import QuerySet  # type: ignore
+from django.test import TestCase  # type: ignore
 
-from apps.exercise.models import Exercise
-from apps.plan.models import Plan
-from apps.workout.models import ExerciseLog, SetLog, WorkoutSession
-from apps.workout.selectors import get_all_sessions, get_dashboard_stats, get_session_by_id
-from apps.workout.serializers import SessionDetailSerializer, SessionListSerializer
-from apps.workout.services import create_session, delete_session, update_session
+from apps.exercise.models import Exercise  # type: ignore
+from apps.plan.models import Plan  # type: ignore
+from apps.workout.models import ExerciseLog, SetLog, WorkoutSession  # type: ignore
+from apps.workout.selectors import get_all_sessions, get_dashboard_stats, get_session_by_id  # type: ignore
+from apps.workout.serializers import SessionDetailSerializer, SessionListSerializer  # type: ignore
+from apps.workout.services import create_session, delete_session, update_session  # type: ignore
 
 
 class WorkoutSessionModelTest(TestCase):

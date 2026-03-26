@@ -1,7 +1,7 @@
-from django.db import transaction
+from django.db import transaction  # type: ignore
 
-from apps.exercise.models import Exercise
-from apps.plan.models import Plan, PlanExercise, PlanWeekly, PlanWeeklyItem
+from apps.exercise.models import Exercise  # type: ignore
+from apps.plan.models import Plan, PlanExercise, PlanWeekly, PlanWeeklyItem  # type: ignore
 
 
 def create_plan(data):
