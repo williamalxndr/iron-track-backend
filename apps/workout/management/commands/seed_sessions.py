@@ -3,7 +3,6 @@ from datetime import date, timedelta
 from django.core.management.base import BaseCommand
 
 from apps.exercise.models import Exercise
-from apps.workout.models import WorkoutSession
 from apps.workout.services import create_session
 
 # Base weights for week 1 — each week adds a small increment
@@ -52,36 +51,42 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         today = date.today()
-        # Start 8 weeks ago (Monday of that week)
-        start_monday = today - timedelta(days=today.weekday()) - timedelta(weeks=NUM_WEEKS - 1)
-
+        start_monday = today - timedelta(days=today.weekday()) - timedelta(days=(NUM_WEEKS - 1) * 7)
         created_count = 0
 
+        if not Exercise.objects.exists():
+            self.stderr.write(self.style.ERROR('No exercises found in database. Please run seed_exercises first.'))
+            return
+
         for week in range(NUM_WEEKS):
-            week_monday = start_monday + timedelta(weeks=week)
-            progression = week * WEEKLY_INCREMENT  # cumulative weight increase
+            # timedelta(weeks=...) is valid, but let's be explicit with days for clarity if needed
+            week_monday = start_monday + timedelta(days=week * 7)
+            progression = float(week * WEEKLY_INCREMENT)
 
             for template in WEEKLY_TEMPLATES:
-                session_date = week_monday + timedelta(days=template['day_in_week'])
+                day_offset = int(template['day_in_week'])
+                session_date = week_monday + timedelta(days=day_offset)
+                
                 if session_date > today:
                     continue
 
                 exercises_payload = []
-                for exercise_name, base_weight, sets_template in template['exercises']:
+                exercises_in_template = template['exercises']
+                for exercise_name, base_weight, sets_template in exercises_in_template:
                     try:
                         exercise = Exercise.objects.get(name=exercise_name)
                     except Exercise.DoesNotExist:
                         self.stderr.write(
                             self.style.WARNING(
-                                f'Exercise "{exercise_name}" not found — run seed_exercises first'
+                                f'Exercise "{exercise_name}" not found — skipping this exercise'
                             )
                         )
-                        return
+                        continue
 
                     sets = []
                     for offset_kg, reps in sets_template:
-                        weight = base_weight + offset_kg + progression
-                        sets.append({'weight': round(weight, 1), 'reps': reps})
+                        weight = float(base_weight) + float(offset_kg) + progression
+                        sets.append({'weight': round(weight, 1), 'reps': int(reps)})
 
                     exercises_payload.append(
                         {
