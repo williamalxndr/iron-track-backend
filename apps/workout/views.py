@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from apps.workout.models import WorkoutSession
 from apps.workout.selectors import get_all_sessions, get_session_by_id
 from apps.workout.serializers import SessionDetailSerializer, SessionListSerializer
-from apps.workout.services import create_session
+from apps.workout.services import create_session, delete_session, update_session
 
 
 class SessionListView(APIView):
@@ -36,3 +36,28 @@ class SessionDetailView(APIView):
             )
         serializer = SessionDetailSerializer(session)
         return Response({'data': serializer.data, 'message': 'success'})
+
+    def put(self, request, pk):
+        try:
+            session = update_session(pk, request.data)
+        except WorkoutSession.DoesNotExist:
+            return Response(
+                {'error': {'code': 'NOT_FOUND', 'message': 'Session not found'}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except ValueError as e:
+            return Response(
+                {'error': {'code': 'INVALID_REQUEST', 'message': str(e)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({'data': {'id': session.id}, 'message': 'success'})
+
+    def delete(self, request, pk):
+        try:
+            delete_session(pk)
+        except WorkoutSession.DoesNotExist:
+            return Response(
+                {'error': {'code': 'NOT_FOUND', 'message': 'Session not found'}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)

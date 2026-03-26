@@ -330,6 +330,50 @@ Get session detail with all exercises and sets.
 
 ---
 
+### PUT /sessions/{id}/
+
+Update an existing workout session. Replaces all exercises and sets.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | integer | Yes | Session ID |
+
+**Request Body:** Same format as `POST /sessions/`
+
+**Response** `200 OK`
+
+```json
+{
+  "data": {
+    "id": 1
+  },
+  "message": "success"
+}
+```
+
+**Response** `400 Bad Request` — invalid payload
+**Response** `404 Not Found` — session does not exist
+
+---
+
+### DELETE /sessions/{id}/
+
+Delete a workout session and all associated exercises and sets.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | integer | Yes | Session ID |
+
+**Response** `204 No Content`
+
+**Response** `404 Not Found` — session does not exist
+
+---
+
 ## 3. Plan
 
 ### GET /plans/
@@ -700,6 +744,8 @@ Get all changes since a given timestamp.
 | GET | `/sessions/` | List sessions | Planned |
 | POST | `/sessions/` | Create session | Planned |
 | GET | `/sessions/{id}/` | Session detail | Planned |
+| PUT | `/sessions/{id}/` | Update session | Planned |
+| DELETE | `/sessions/{id}/` | Delete session | Planned |
 | GET | `/plans/` | List plans | Planned |
 | POST | `/plans/` | Create plan | Planned |
 | GET | `/plans/{id}/` | Plan detail | Planned |
