@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from django.db.models import Avg, F, FloatField, Sum
+from django.db.models import F, FloatField, Sum
 from django.db.models.functions import TruncWeek
 
 from apps.workout.models import SetLog, WorkoutSession

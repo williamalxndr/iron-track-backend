@@ -35,7 +35,7 @@ def create_session(data):
         try:
             plan = Plan.objects.get(id=plan_id)
         except Plan.DoesNotExist:
-            raise ValueError(f'Plan with id {plan_id} does not exist')
+            raise ValueError(f'Plan with id {plan_id} does not exist') from None
 
     with transaction.atomic():
         session = WorkoutSession.objects.create(
@@ -96,7 +96,7 @@ def update_session(session_id, data):
         try:
             plan = Plan.objects.get(id=plan_id)
         except Plan.DoesNotExist:
-            raise ValueError(f'Plan with id {plan_id} does not exist')
+            raise ValueError(f'Plan with id {plan_id} does not exist') from None
 
     with transaction.atomic():
         session.date = date_value

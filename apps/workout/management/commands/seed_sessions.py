@@ -6,6 +6,7 @@ from django.core.management.base import BaseCommand  # type: ignore
 from apps.exercise.models import Exercise  # type: ignore
 from apps.workout.services import create_session  # type: ignore
 
+
 class ExerciseTemplate(TypedDict):
     name: str
     base_weight: float
@@ -76,7 +77,7 @@ class Command(BaseCommand):
             for template in WEEKLY_TEMPLATES:
                 day_offset = int(template['day_in_week'])
                 session_date: date = week_monday + timedelta(days=day_offset)
-                
+
                 if session_date > today:
                     continue
 
