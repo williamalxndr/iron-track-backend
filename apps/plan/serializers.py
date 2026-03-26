@@ -15,7 +15,7 @@ class PlanExerciseDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PlanExercise
-        fields = ['exercise_id', 'exercise_name', 'target_sets', 'target_reps']
+        fields = ['exercise_id', 'exercise_name']
 
 
 class PlanDetailSerializer(serializers.ModelSerializer):

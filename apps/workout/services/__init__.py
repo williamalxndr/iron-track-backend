@@ -1,9 +1,10 @@
 from datetime import date as date_type
 
-from django.db import transaction
+from django.db import transaction  # type: ignore
 
-from apps.exercise.models import Exercise
-from apps.workout.models import ExerciseLog, SetLog, WorkoutSession
+from apps.exercise.models import Exercise  # type: ignore
+from apps.plan.models import Plan  # type: ignore
+from apps.workout.models import ExerciseLog, SetLog, WorkoutSession  # type: ignore
 
 
 def create_session(data):
@@ -28,10 +29,18 @@ def create_session(data):
     if isinstance(date_value, str):
         date_value = date_type.fromisoformat(date_value)
 
+    plan_id = data.get('plan_id')
+    plan = None
+    if plan_id:
+        try:
+            plan = Plan.objects.get(id=plan_id)
+        except Plan.DoesNotExist:
+            raise ValueError(f'Plan with id {plan_id} does not exist') from None
+
     with transaction.atomic():
         session = WorkoutSession.objects.create(
             date=date_value,
-            notes=data.get('notes'),
+            plan=plan,
         )
 
         for order_index, ex_data in enumerate(exercises):
@@ -81,9 +90,17 @@ def update_session(session_id, data):
     if isinstance(date_value, str):
         date_value = date_type.fromisoformat(date_value)
 
+    plan_id = data.get('plan_id')
+    plan = None
+    if plan_id:
+        try:
+            plan = Plan.objects.get(id=plan_id)
+        except Plan.DoesNotExist:
+            raise ValueError(f'Plan with id {plan_id} does not exist') from None
+
     with transaction.atomic():
         session.date = date_value
-        session.notes = data.get('notes')
+        session.plan = plan
         session.save()
 
         # Delete old exercise logs (cascades to set logs)

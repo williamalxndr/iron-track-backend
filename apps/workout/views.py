@@ -3,9 +3,21 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.workout.models import WorkoutSession
-from apps.workout.selectors import get_all_sessions, get_session_by_id
+from apps.workout.selectors import get_all_sessions, get_dashboard_stats, get_session_by_id
 from apps.workout.serializers import SessionDetailSerializer, SessionListSerializer
 from apps.workout.services import create_session, delete_session, update_session
+
+
+class DashboardView(APIView):
+    def get(self, request):
+        timespan = request.query_params.get('timespan', '1M')
+        if timespan not in ('1W', '1M', '3M'):
+            return Response(
+                {'error': {'code': 'INVALID_REQUEST', 'message': 'timespan must be 1W, 1M, or 3M'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        stats = get_dashboard_stats(timespan)
+        return Response({'data': stats, 'message': 'success'})
 
 
 class SessionListView(APIView):

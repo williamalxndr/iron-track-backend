@@ -1,15 +1,16 @@
 import json
 from datetime import date
 
-from django.db import IntegrityError
-from django.db.models import QuerySet
-from django.test import TestCase
+from django.db import IntegrityError  # type: ignore
+from django.db.models import QuerySet  # type: ignore
+from django.test import TestCase  # type: ignore
 
-from apps.exercise.models import Exercise
-from apps.workout.models import ExerciseLog, SetLog, WorkoutSession
-from apps.workout.selectors import get_all_sessions, get_session_by_id
-from apps.workout.serializers import SessionDetailSerializer, SessionListSerializer
-from apps.workout.services import create_session, delete_session, update_session
+from apps.exercise.models import Exercise  # type: ignore
+from apps.plan.models import Plan  # type: ignore
+from apps.workout.models import ExerciseLog, SetLog, WorkoutSession  # type: ignore
+from apps.workout.selectors import get_all_sessions, get_dashboard_stats, get_session_by_id  # type: ignore
+from apps.workout.serializers import SessionDetailSerializer, SessionListSerializer  # type: ignore
+from apps.workout.services import create_session, delete_session, update_session  # type: ignore
 
 
 class WorkoutSessionModelTest(TestCase):
@@ -21,10 +22,6 @@ class WorkoutSessionModelTest(TestCase):
     def test_date_is_required(self):
         with self.assertRaises(IntegrityError):
             WorkoutSession.objects.create(date=None)
-
-    def test_notes_is_optional(self):
-        session = WorkoutSession.objects.create(date=date(2026, 3, 22))
-        self.assertIsNone(session.notes)
 
     def test_str(self):
         session = WorkoutSession.objects.create(date=date(2026, 3, 22))
@@ -178,7 +175,6 @@ class SessionServiceTest(TestCase):
     def test_create_session_basic(self):
         data = {
             'date': '2026-03-22',
-            'notes': 'Push day',
             'exercises': [
                 {
                     'exercise_id': self.exercise1.id,
@@ -188,7 +184,6 @@ class SessionServiceTest(TestCase):
         }
         session = create_session(data)
         self.assertEqual(session.date, date(2026, 3, 22))
-        self.assertEqual(session.notes, 'Push day')
 
     def test_create_session_with_exercises_and_sets(self):
         data = {
@@ -208,19 +203,6 @@ class SessionServiceTest(TestCase):
         self.assertEqual(session.exercise_logs.count(), 2)
         first_log = session.exercise_logs.order_by('order_index').first()
         self.assertEqual(first_log.sets.count(), 2)
-
-    def test_create_session_without_notes(self):
-        data = {
-            'date': '2026-03-22',
-            'exercises': [
-                {
-                    'exercise_id': self.exercise1.id,
-                    'sets': [{'weight': 60.0, 'reps': 10}],
-                },
-            ],
-        }
-        session = create_session(data)
-        self.assertIsNone(session.notes)
 
     def test_create_session_sets_order_index(self):
         data = {
@@ -275,6 +257,17 @@ class SessionServiceTest(TestCase):
         with self.assertRaises(ValueError):
             create_session(data)
 
+    def test_create_session_invalid_plan_id(self):
+        data = {
+            'date': '2026-03-22',
+            'plan_id': 9999,
+            'exercises': [
+                {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+            ],
+        }
+        with self.assertRaises(ValueError):
+            create_session(data)
+
     def test_create_session_empty_sets(self):
         data = {
             'date': '2026-03-22',
@@ -297,6 +290,18 @@ class SessionServiceTest(TestCase):
         self.assertEqual(session.exercise_logs.count(), 1)
         self.assertEqual(session.exercise_logs.first().sets.count(), 1)
 
+    def test_create_session_with_plan(self):
+        plan = Plan.objects.create(name='Push Day', type='PUSH')
+        data = {
+            'date': '2026-03-22',
+            'plan_id': plan.id,
+            'exercises': [
+                {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+            ],
+        }
+        session = create_session(data)
+        self.assertEqual(session.plan, plan)
+
 
 # ── Serializer Tests ────────────────────────────────────────────────
 
@@ -304,7 +309,7 @@ class SessionServiceTest(TestCase):
 class SessionSerializerTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
-        self.session = WorkoutSession.objects.create(date=date(2026, 3, 22), notes='Push day')
+        self.session = WorkoutSession.objects.create(date=date(2026, 3, 22))
         self.log = ExerciseLog.objects.create(session=self.session, exercise=self.exercise, order_index=0)
         SetLog.objects.create(exercise_log=self.log, set_number=1, weight=80.0, reps=8)
         SetLog.objects.create(exercise_log=self.log, set_number=2, weight=80.0, reps=6)
@@ -314,7 +319,6 @@ class SessionSerializerTest(TestCase):
         data = SessionListSerializer(self.session).data
         self.assertEqual(data['id'], self.session.id)
         self.assertEqual(data['date'], '2026-03-22')
-        self.assertEqual(data['notes'], 'Push day')
         self.assertIn('created_at', data)
 
     def test_detail_serializer_includes_exercises(self):
@@ -335,11 +339,18 @@ class SessionSerializerTest(TestCase):
         self.assertEqual(s['weight'], 80.0)
         self.assertEqual(s['reps'], 8)
 
+    def test_serializer_includes_plan_id(self):
+        plan = Plan.objects.create(name='Push Day', type='PUSH')
+        self.session.plan = plan
+        self.session.save()
+
+        list_data = SessionListSerializer(self.session).data
+        self.assertEqual(list_data.get('plan_id'), plan.id)
+
+        detail_data = SessionDetailSerializer(self.session).data
+        self.assertEqual(detail_data.get('plan_id'), plan.id)
+
     # Corner
-    def test_detail_serializer_null_notes(self):
-        session = WorkoutSession.objects.create(date=date(2026, 3, 20))
-        data = SessionDetailSerializer(session).data
-        self.assertIsNone(data['notes'])
 
 
 # ── View Tests ──────────────────────────────────────────────────────
@@ -434,7 +445,7 @@ class SessionCreateViewTest(TestCase):
 class SessionDetailViewTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
-        self.session = WorkoutSession.objects.create(date=date(2026, 3, 22), notes='Push day')
+        self.session = WorkoutSession.objects.create(date=date(2026, 3, 22))
         log = ExerciseLog.objects.create(session=self.session, exercise=self.exercise, order_index=0)
         SetLog.objects.create(exercise_log=log, set_number=1, weight=80.0, reps=8)
 
@@ -534,7 +545,6 @@ class UpdateSessionServiceTest(TestCase):
         self.session = create_session(
             {
                 'date': '2026-03-22',
-                'notes': 'Original notes',
                 'exercises': [
                     {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
                 ],
@@ -552,19 +562,6 @@ class UpdateSessionServiceTest(TestCase):
             },
         )
         self.assertEqual(session.date, date(2026, 3, 25))
-
-    def test_update_session_changes_notes(self):
-        session = update_session(
-            self.session.id,
-            {
-                'date': '2026-03-22',
-                'notes': 'Updated notes',
-                'exercises': [
-                    {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
-                ],
-            },
-        )
-        self.assertEqual(session.notes, 'Updated notes')
 
     def test_update_session_replaces_exercises(self):
         update_session(
@@ -622,6 +619,48 @@ class UpdateSessionServiceTest(TestCase):
                     ],
                 },
             )
+
+    def test_update_session_adds_plan(self):
+        plan = Plan.objects.create(name='Pull Day', type='PULL')
+        session = update_session(
+            self.session.id,
+            {
+                'date': '2026-03-22',
+                'plan_id': plan.id,
+                'exercises': [
+                    {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+                ],
+            },
+        )
+        self.assertEqual(session.plan, plan)
+
+    def test_update_session_removes_plan(self):
+        plan = Plan.objects.create(name='Push Day', type='PUSH')
+        self.session.plan = plan
+        self.session.save()
+
+        session = update_session(
+            self.session.id,
+            {
+                'date': '2026-03-22',
+                'plan_id': None,
+                'exercises': [
+                    {'exercise_id': self.exercise1.id, 'sets': [{'weight': 80.0, 'reps': 8}]},
+                ],
+            },
+        )
+        self.assertIsNone(session.plan)
+
+    def test_delete_plan_sets_session_plan_to_null_not_cascade(self):
+        plan = Plan.objects.create(name='Push Day', type='PUSH')
+        self.session.plan = plan
+        self.session.save()
+
+        plan.delete()
+
+        self.session.refresh_from_db()
+        self.assertIsNone(self.session.plan)
+        self.assertTrue(WorkoutSession.objects.filter(id=self.session.id).exists())
 
 
 class UpdateSessionViewTest(TestCase):
@@ -692,3 +731,80 @@ class UpdateSessionViewTest(TestCase):
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 400)
+
+
+# ── Dashboard Tests ────────────────────────────────────────────────
+
+
+class DashboardSelectorTest(TestCase):
+    def setUp(self):
+        self.exercise1 = Exercise.objects.create(name='Bench Press', category='Chest')
+        self.exercise2 = Exercise.objects.create(name='Barbell Row', category='Back')
+        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
+
+        session = WorkoutSession.objects.create(date=date.today(), plan=self.plan)
+        log1 = ExerciseLog.objects.create(session=session, exercise=self.exercise1)
+        SetLog.objects.create(exercise_log=log1, weight=80.0, reps=10)
+        log2 = ExerciseLog.objects.create(session=session, exercise=self.exercise2)
+        SetLog.objects.create(exercise_log=log2, weight=60.0, reps=10)
+
+    def test_total_volume(self):
+        stats = get_dashboard_stats('1M')
+        self.assertEqual(stats['total_volume'], 80 * 10 + 60 * 10)
+
+    def test_session_count(self):
+        stats = get_dashboard_stats('1M')
+        self.assertEqual(stats['session_count'], 1)
+
+    def test_volume_by_category(self):
+        stats = get_dashboard_stats('1M')
+        cats = {c['category']: c['volume'] for c in stats['volume_by_category']}
+        self.assertEqual(cats['Chest'], 800.0)
+        self.assertEqual(cats['Back'], 600.0)
+
+    def test_avg_volume_by_plan_type(self):
+        stats = get_dashboard_stats('1M')
+        types = {t['plan_type']: t['avg_volume'] for t in stats['avg_volume_by_plan_type']}
+        self.assertEqual(types['PUSH'], 1400.0)
+
+    def test_weekly_volume(self):
+        stats = get_dashboard_stats('1M')
+        self.assertGreaterEqual(len(stats['weekly_volume']), 1)
+        self.assertEqual(stats['weekly_volume'][0]['volume'], 1400.0)
+
+    def test_no_sessions(self):
+        WorkoutSession.objects.all().delete()
+        stats = get_dashboard_stats('1M')
+        self.assertEqual(stats['total_volume'], 0)
+        self.assertEqual(stats['session_count'], 0)
+        self.assertEqual(stats['volume_by_category'], [])
+        self.assertEqual(stats['weekly_volume'], [])
+
+
+class DashboardViewTest(TestCase):
+    def test_dashboard_200(self):
+        response = self.client.get('/api/v1/sessions/dashboard/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_dashboard_default_timespan(self):
+        response = self.client.get('/api/v1/sessions/dashboard/')
+        data = response.json()
+        self.assertIn('data', data)
+        self.assertIn('total_volume', data['data'])
+
+    def test_dashboard_with_timespan(self):
+        response = self.client.get('/api/v1/sessions/dashboard/?timespan=3M')
+        self.assertEqual(response.status_code, 200)
+
+    def test_dashboard_invalid_timespan_400(self):
+        response = self.client.get('/api/v1/sessions/dashboard/?timespan=6M')
+        self.assertEqual(response.status_code, 400)
+
+    def test_dashboard_response_shape(self):
+        response = self.client.get('/api/v1/sessions/dashboard/?timespan=1W')
+        data = response.json()['data']
+        self.assertIn('volume_by_category', data)
+        self.assertIn('total_volume', data)
+        self.assertIn('session_count', data)
+        self.assertIn('avg_volume_by_plan_type', data)
+        self.assertIn('weekly_volume', data)

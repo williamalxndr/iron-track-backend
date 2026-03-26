@@ -18,7 +18,7 @@ from apps.plan.serializers import (
     PlanWeeklyDetailSerializer,
     PlanWeeklyListSerializer,
 )
-from apps.plan.services import create_plan, create_plan_weekly
+from apps.plan.services import create_plan, create_plan_weekly, delete_plan, update_plan
 
 
 class PlanModelTest(TestCase):
@@ -52,18 +52,9 @@ class PlanExerciseModelTest(TestCase):
         pe = PlanExercise.objects.create(
             plan=self.plan,
             exercise=self.exercise,
-            target_sets=3,
-            target_reps=10,
         )
         self.assertEqual(pe.plan, self.plan)
         self.assertEqual(pe.exercise, self.exercise)
-        self.assertEqual(pe.target_sets, 3)
-        self.assertEqual(pe.target_reps, 10)
-
-    def test_target_sets_and_reps_optional(self):
-        pe = PlanExercise.objects.create(plan=self.plan, exercise=self.exercise)
-        self.assertIsNone(pe.target_sets)
-        self.assertIsNone(pe.target_reps)
 
     def test_order_index_default(self):
         pe = PlanExercise.objects.create(plan=self.plan, exercise=self.exercise)
@@ -193,8 +184,8 @@ class PlanServiceTest(TestCase):
             'name': 'Push Day',
             'type': 'PUSH',
             'exercises': [
-                {'exercise_id': self.exercise1.id, 'target_sets': 3, 'target_reps': 10},
-                {'exercise_id': self.exercise2.id, 'target_sets': 3, 'target_reps': 8},
+                {'exercise_id': self.exercise1.id},
+                {'exercise_id': self.exercise2.id},
             ],
         }
         plan = create_plan(data)
@@ -210,8 +201,8 @@ class PlanServiceTest(TestCase):
             'name': 'Push Day',
             'type': 'PUSH',
             'exercises': [
-                {'exercise_id': self.exercise1.id, 'target_sets': 3, 'target_reps': 10},
-                {'exercise_id': self.exercise2.id, 'target_sets': 3, 'target_reps': 8},
+                {'exercise_id': self.exercise1.id},
+                {'exercise_id': self.exercise2.id},
             ],
         }
         plan = create_plan(data)
@@ -234,7 +225,7 @@ class PlanServiceTest(TestCase):
         data = {
             'name': 'Push Day',
             'type': 'PUSH',
-            'exercises': [{'exercise_id': 9999, 'target_sets': 3, 'target_reps': 10}],
+            'exercises': [{'exercise_id': 9999}],
         }
         with self.assertRaises(ValueError):
             create_plan(data)
@@ -244,7 +235,7 @@ class PlanServiceTest(TestCase):
         data = {
             'name': 'Push Day',
             'type': 'PUSH',
-            'exercises': [{'exercise_id': self.exercise1.id, 'target_sets': 5, 'target_reps': 5}],
+            'exercises': [{'exercise_id': self.exercise1.id}],
         }
         plan = create_plan(data)
         self.assertEqual(plan.exercises.count(), 1)
@@ -257,9 +248,7 @@ class PlanSerializerTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
         self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-        PlanExercise.objects.create(
-            plan=self.plan, exercise=self.exercise, target_sets=3, target_reps=10, order_index=0
-        )
+        PlanExercise.objects.create(plan=self.plan, exercise=self.exercise, order_index=0)
 
     # Positive
     def test_list_serializer_fields(self):
@@ -278,17 +267,6 @@ class PlanSerializerTest(TestCase):
         ex = data['exercises'][0]
         self.assertEqual(ex['exercise_id'], self.exercise.id)
         self.assertEqual(ex['exercise_name'], 'Bench Press')
-        self.assertEqual(ex['target_sets'], 3)
-        self.assertEqual(ex['target_reps'], 10)
-
-    # Corner
-    def test_detail_serializer_null_targets(self):
-        plan = Plan.objects.create(name='Flex Day', type='FULL_BODY')
-        PlanExercise.objects.create(plan=plan, exercise=self.exercise, order_index=0)
-        data = PlanDetailSerializer(plan).data
-        ex = data['exercises'][0]
-        self.assertIsNone(ex['target_sets'])
-        self.assertIsNone(ex['target_reps'])
 
 
 # ── View Tests ──────────────────────────────────────────────────────
@@ -328,7 +306,7 @@ class PlanCreateViewTest(TestCase):
         payload = {
             'name': 'Push Day',
             'type': 'PUSH',
-            'exercises': [{'exercise_id': self.exercise.id, 'target_sets': 3, 'target_reps': 10}],
+            'exercises': [{'exercise_id': self.exercise.id}],
         }
         response = self.client.post('/api/v1/plans/', data=json.dumps(payload), content_type='application/json')
         self.assertEqual(response.status_code, 201)
@@ -357,9 +335,7 @@ class PlanDetailViewTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
         self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-        PlanExercise.objects.create(
-            plan=self.plan, exercise=self.exercise, target_sets=3, target_reps=10, order_index=0
-        )
+        PlanExercise.objects.create(plan=self.plan, exercise=self.exercise, order_index=0)
 
     # Positive
     def test_get_plan_detail_200(self):
@@ -380,6 +356,117 @@ class PlanDetailViewTest(TestCase):
     def test_detail_post_not_allowed_405(self):
         response = self.client.post(f'/api/v1/plans/{self.plan.id}/')
         self.assertEqual(response.status_code, 405)
+
+
+# ── Update Plan Tests ──────────────────────────────────────────────
+
+
+class UpdatePlanServiceTest(TestCase):
+    def setUp(self):
+        self.exercise1 = Exercise.objects.create(name='Bench Press', category='Chest')
+        self.exercise2 = Exercise.objects.create(name='Overhead Press', category='Shoulders')
+        self.plan = create_plan(
+            {
+                'name': 'Push Day',
+                'type': 'PUSH',
+                'exercises': [{'exercise_id': self.exercise1.id}],
+            }
+        )
+
+    def test_update_plan_name_and_type(self):
+        plan = update_plan(
+            self.plan.id,
+            {
+                'name': 'Pull Day',
+                'type': 'PULL',
+                'exercises': [{'exercise_id': self.exercise1.id}],
+            },
+        )
+        self.assertEqual(plan.name, 'Pull Day')
+        self.assertEqual(plan.type, 'PULL')
+
+    def test_update_plan_replaces_exercises(self):
+        plan = update_plan(
+            self.plan.id,
+            {
+                'name': 'Push Day',
+                'type': 'PUSH',
+                'exercises': [{'exercise_id': self.exercise2.id}],
+            },
+        )
+        exercises = list(plan.exercises.all())
+        self.assertEqual(len(exercises), 1)
+        self.assertEqual(exercises[0].exercise_id, self.exercise2.id)
+
+    def test_update_plan_not_found(self):
+        with self.assertRaises(Plan.DoesNotExist):
+            update_plan(9999, {'name': 'X', 'type': 'PUSH', 'exercises': []})
+
+    def test_update_plan_missing_name(self):
+        with self.assertRaises(ValueError):
+            update_plan(self.plan.id, {'type': 'PUSH', 'exercises': []})
+
+    def test_update_plan_invalid_exercise(self):
+        with self.assertRaises(ValueError):
+            update_plan(
+                self.plan.id,
+                {
+                    'name': 'Push Day',
+                    'type': 'PUSH',
+                    'exercises': [{'exercise_id': 9999}],
+                },
+            )
+
+
+class DeletePlanServiceTest(TestCase):
+    def setUp(self):
+        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
+
+    def test_delete_plan(self):
+        delete_plan(self.plan.id)
+        self.assertFalse(Plan.objects.filter(id=self.plan.id).exists())
+
+    def test_delete_plan_not_found(self):
+        with self.assertRaises(Plan.DoesNotExist):
+            delete_plan(9999)
+
+
+class UpdatePlanViewTest(TestCase):
+    def setUp(self):
+        self.exercise = Exercise.objects.create(name='Bench Press', category='Chest')
+        self.plan = create_plan(
+            {
+                'name': 'Push Day',
+                'type': 'PUSH',
+                'exercises': [{'exercise_id': self.exercise.id}],
+            }
+        )
+
+    def test_update_plan_200(self):
+        payload = {'name': 'Pull Day', 'type': 'PULL', 'exercises': []}
+        response = self.client.put(
+            f'/api/v1/plans/{self.plan.id}/',
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_update_plan_not_found_404(self):
+        payload = {'name': 'X', 'type': 'PUSH', 'exercises': []}
+        response = self.client.put(
+            '/api/v1/plans/9999/',
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_plan_204(self):
+        response = self.client.delete(f'/api/v1/plans/{self.plan.id}/')
+        self.assertEqual(response.status_code, 204)
+
+    def test_delete_plan_not_found_404(self):
+        response = self.client.delete('/api/v1/plans/9999/')
+        self.assertEqual(response.status_code, 404)
 
 
 # ── Plan Weekly Selector Tests ─────────────────────────────────────

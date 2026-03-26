@@ -4,9 +4,11 @@ from apps.workout.models import ExerciseLog, SetLog, WorkoutSession
 
 
 class SessionListSerializer(serializers.ModelSerializer):
+    total_volume = serializers.FloatField(read_only=True, default=None)
+
     class Meta:
         model = WorkoutSession
-        fields = ['id', 'date', 'notes', 'created_at']
+        fields = ['id', 'date', 'plan_id', 'created_at', 'total_volume']
 
 
 class SetLogSerializer(serializers.ModelSerializer):
@@ -30,4 +32,4 @@ class SessionDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkoutSession
-        fields = ['id', 'date', 'notes', 'exercises']
+        fields = ['id', 'date', 'plan_id', 'exercises']
