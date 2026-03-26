@@ -12,15 +12,17 @@ class ExerciseTemplate(TypedDict):
     base_weight: float
     sets: list[tuple[float, int]]
 
+
 class DayTemplate(TypedDict):
     day_in_week: int
     exercises: list[tuple[str, float, list[tuple[float, int]]]]
+
 
 # Base weights for week 1 — each week adds a small increment
 PUSH_DAY: DayTemplate = {
     'day_in_week': 0,  # Monday
     'exercises': [
-        ('Bench Press', 70.0, [(0, 8), (5, 6), (5, 5)]),       # (offset_kg, reps)
+        ('Bench Press', 70.0, [(0, 8), (5, 6), (5, 5)]),  # (offset_kg, reps)
         ('Overhead Press', 35.0, [(0, 10), (2.5, 8), (2.5, 7)]),
         ('Incline Dumbbell Press', 24.0, [(0, 10), (0, 10), (0, 8)]),
         ('Tricep Pushdown', 20.0, [(0, 12), (0, 12), (0, 10)]),
@@ -89,9 +91,7 @@ class Command(BaseCommand):
                         exercise = Exercise.objects.get(name=exercise_name)
                     except Exercise.DoesNotExist:
                         self.stderr.write(
-                            self.style.WARNING(
-                                f'Exercise "{exercise_name}" not found — skipping this exercise'
-                            )
+                            self.style.WARNING(f'Exercise "{exercise_name}" not found — skipping this exercise')
                         )
                         continue
 

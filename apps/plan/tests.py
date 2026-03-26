@@ -248,9 +248,7 @@ class PlanSerializerTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
         self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-        PlanExercise.objects.create(
-            plan=self.plan, exercise=self.exercise, order_index=0
-        )
+        PlanExercise.objects.create(plan=self.plan, exercise=self.exercise, order_index=0)
 
     # Positive
     def test_list_serializer_fields(self):
@@ -337,9 +335,7 @@ class PlanDetailViewTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
         self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-        PlanExercise.objects.create(
-            plan=self.plan, exercise=self.exercise, order_index=0
-        )
+        PlanExercise.objects.create(plan=self.plan, exercise=self.exercise, order_index=0)
 
     # Positive
     def test_get_plan_detail_200(self):
@@ -369,27 +365,35 @@ class UpdatePlanServiceTest(TestCase):
     def setUp(self):
         self.exercise1 = Exercise.objects.create(name='Bench Press', category='Chest')
         self.exercise2 = Exercise.objects.create(name='Overhead Press', category='Shoulders')
-        self.plan = create_plan({
-            'name': 'Push Day',
-            'type': 'PUSH',
-            'exercises': [{'exercise_id': self.exercise1.id}],
-        })
+        self.plan = create_plan(
+            {
+                'name': 'Push Day',
+                'type': 'PUSH',
+                'exercises': [{'exercise_id': self.exercise1.id}],
+            }
+        )
 
     def test_update_plan_name_and_type(self):
-        plan = update_plan(self.plan.id, {
-            'name': 'Pull Day',
-            'type': 'PULL',
-            'exercises': [{'exercise_id': self.exercise1.id}],
-        })
+        plan = update_plan(
+            self.plan.id,
+            {
+                'name': 'Pull Day',
+                'type': 'PULL',
+                'exercises': [{'exercise_id': self.exercise1.id}],
+            },
+        )
         self.assertEqual(plan.name, 'Pull Day')
         self.assertEqual(plan.type, 'PULL')
 
     def test_update_plan_replaces_exercises(self):
-        plan = update_plan(self.plan.id, {
-            'name': 'Push Day',
-            'type': 'PUSH',
-            'exercises': [{'exercise_id': self.exercise2.id}],
-        })
+        plan = update_plan(
+            self.plan.id,
+            {
+                'name': 'Push Day',
+                'type': 'PUSH',
+                'exercises': [{'exercise_id': self.exercise2.id}],
+            },
+        )
         exercises = list(plan.exercises.all())
         self.assertEqual(len(exercises), 1)
         self.assertEqual(exercises[0].exercise_id, self.exercise2.id)
@@ -404,11 +408,14 @@ class UpdatePlanServiceTest(TestCase):
 
     def test_update_plan_invalid_exercise(self):
         with self.assertRaises(ValueError):
-            update_plan(self.plan.id, {
-                'name': 'Push Day',
-                'type': 'PUSH',
-                'exercises': [{'exercise_id': 9999}],
-            })
+            update_plan(
+                self.plan.id,
+                {
+                    'name': 'Push Day',
+                    'type': 'PUSH',
+                    'exercises': [{'exercise_id': 9999}],
+                },
+            )
 
 
 class DeletePlanServiceTest(TestCase):
@@ -427,11 +434,13 @@ class DeletePlanServiceTest(TestCase):
 class UpdatePlanViewTest(TestCase):
     def setUp(self):
         self.exercise = Exercise.objects.create(name='Bench Press', category='Chest')
-        self.plan = create_plan({
-            'name': 'Push Day',
-            'type': 'PUSH',
-            'exercises': [{'exercise_id': self.exercise.id}],
-        })
+        self.plan = create_plan(
+            {
+                'name': 'Push Day',
+                'type': 'PUSH',
+                'exercises': [{'exercise_id': self.exercise.id}],
+            }
+        )
 
     def test_update_plan_200(self):
         payload = {'name': 'Pull Day', 'type': 'PULL', 'exercises': []}
