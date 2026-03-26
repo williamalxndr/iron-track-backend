@@ -40,7 +40,7 @@ def update_plan(plan_id, data):
     try:
         plan = Plan.objects.get(id=plan_id)
     except Plan.DoesNotExist:
-        raise Plan.DoesNotExist
+        raise Plan.DoesNotExist from None
 
     name = data.get('name')
     if not name:
@@ -80,7 +80,7 @@ def delete_plan(plan_id):
     try:
         plan = Plan.objects.get(id=plan_id)
     except Plan.DoesNotExist:
-        raise Plan.DoesNotExist
+        raise Plan.DoesNotExist from None
     plan.delete()
 
 

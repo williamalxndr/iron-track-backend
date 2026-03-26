@@ -1,5 +1,5 @@
 from datetime import date, timedelta
-from typing import List, Tuple, TypedDict, cast
+from typing import TypedDict
 
 from django.core.management.base import BaseCommand  # type: ignore
 
@@ -9,11 +9,11 @@ from apps.workout.services import create_session  # type: ignore
 class ExerciseTemplate(TypedDict):
     name: str
     base_weight: float
-    sets: List[Tuple[float, int]]
+    sets: list[tuple[float, int]]
 
 class DayTemplate(TypedDict):
     day_in_week: int
-    exercises: List[Tuple[str, float, List[Tuple[float, int]]]]
+    exercises: list[tuple[str, float, list[tuple[float, int]]]]
 
 # Base weights for week 1 — each week adds a small increment
 PUSH_DAY: DayTemplate = {
@@ -49,7 +49,7 @@ LEG_DAY: DayTemplate = {
     ],
 }
 
-WEEKLY_TEMPLATES: List[DayTemplate] = [PUSH_DAY, PULL_DAY, LEG_DAY]
+WEEKLY_TEMPLATES: list[DayTemplate] = [PUSH_DAY, PULL_DAY, LEG_DAY]
 NUM_WEEKS = 8
 
 # Weekly weight progression per exercise (kg added per week)

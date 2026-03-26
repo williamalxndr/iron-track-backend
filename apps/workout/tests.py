@@ -343,10 +343,10 @@ class SessionSerializerTest(TestCase):
         plan = Plan.objects.create(name='Push Day', type='PUSH')
         self.session.plan = plan
         self.session.save()
-        
+
         list_data = SessionListSerializer(self.session).data
         self.assertEqual(list_data.get('plan_id'), plan.id)
-        
+
         detail_data = SessionDetailSerializer(self.session).data
         self.assertEqual(detail_data.get('plan_id'), plan.id)
 
@@ -637,7 +637,7 @@ class UpdateSessionServiceTest(TestCase):
         plan = Plan.objects.create(name='Push Day', type='PUSH')
         self.session.plan = plan
         self.session.save()
-        
+
         session = update_session(
             self.session.id,
             {
@@ -654,9 +654,9 @@ class UpdateSessionServiceTest(TestCase):
         plan = Plan.objects.create(name='Push Day', type='PUSH')
         self.session.plan = plan
         self.session.save()
-        
+
         plan.delete()
-        
+
         self.session.refresh_from_db()
         self.assertIsNone(self.session.plan)
         self.assertTrue(WorkoutSession.objects.filter(id=self.session.id).exists())
