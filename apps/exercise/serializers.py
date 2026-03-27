@@ -6,4 +6,4 @@ from .models import Exercise
 class ExerciseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Exercise
-        fields = ['id', 'name', 'category', 'created_at']
+        fields = ['id', 'name', 'category', 'image_url', 'created_at']
