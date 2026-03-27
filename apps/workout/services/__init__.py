@@ -1,6 +1,6 @@
 from datetime import date as date_type
 
-from django.db import transaction
+from django.db import transaction  # type: ignore
 
 from apps.exercise.models import Exercise  # type: ignore
 from apps.plan.models import Plan  # type: ignore

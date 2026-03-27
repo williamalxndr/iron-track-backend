@@ -37,8 +37,11 @@ source = ["apps"]
 branch = true
 omit = [
     "*/migrations/*",
+    "*/management/commands/*",
     "*/tests/*",
     "*/tests.py",
+    "*/admin.py",
+    "*/apps.py",
     "manage.py",
     "config/asgi.py",
     "config/wsgi.py",

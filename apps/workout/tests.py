@@ -1,12 +1,12 @@
 from datetime import date
 
-from django.test import TestCase
-from rest_framework import status
-from rest_framework.test import APIClient
+from django.test import TestCase  # type: ignore
+from rest_framework import status  # type: ignore
+from rest_framework.test import APIClient  # type: ignore
 
-from apps.accounts.models import User
-from apps.exercise.models import Exercise
-from apps.workout.models import WorkoutSession
+from apps.accounts.models import User  # type: ignore
+from apps.exercise.models import Exercise  # type: ignore
+from apps.workout.models import WorkoutSession  # type: ignore
 
 TEST_PASSWORD = 'testpass123'  # noqa: S105
 
@@ -29,22 +29,56 @@ class SessionApiTest(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(resp.data['data']), 1)
 
-    def test_create_session(self):
+    def test_create_session_no_date_uses_today(self):
         resp = self.client.post(
             '/api/v1/sessions/',
-            {
-                'date': '2025-01-15',
-                'exercises': [
-                    {
-                        'exercise_id': self.exercise.id,
-                        'sets': [{'weight': 60, 'reps': 10}],
-                    },
-                ],
-            },
+            {'exercises': [{'exercise_id': self.exercise.id, 'sets': [{'weight': 60, 'reps': 10}]}]},
             format='json',
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(WorkoutSession.objects.filter(user=self.user).exists())
+        self.assertEqual(WorkoutSession.objects.first().date, date.today())
+
+    def test_create_session_invalid_exercise_returns_400(self):
+        resp = self.client.post(
+            '/api/v1/sessions/',
+            {'date': '2025-01-15', 'exercises': [{'exercise_id': 9999, 'sets': [{'weight': 60, 'reps': 10}]}]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_session_no_sets_returns_400(self):
+        resp = self.client.post(
+            '/api/v1/sessions/',
+            {'date': '2025-01-15', 'exercises': [{'exercise_id': self.exercise.id, 'sets': []}]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_session(self):
+        session = self._create_session()
+        resp = self.client.put(
+            f'/api/v1/sessions/{session.id}/',
+            {
+                'date': '2025-01-20',
+                'exercises': [{'exercise_id': self.exercise.id, 'sets': [{'weight': 70, 'reps': 5}]}],
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        session.refresh_from_db()
+        self.assertEqual(session.date, date(2025, 1, 20))
+
+    def test_update_other_users_session_returns_404(self):
+        session = self._create_session(self.other_user)
+        resp = self.client.put(
+            f'/api/v1/sessions/{session.id}/',
+            {
+                'date': '2025-01-20',
+                'exercises': [{'exercise_id': self.exercise.id, 'sets': [{'weight': 70, 'reps': 5}]}],
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_get_session_detail(self):
         session = self._create_session()

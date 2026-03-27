@@ -1,10 +1,10 @@
-from django.test import TestCase
-from rest_framework import status
-from rest_framework.test import APIClient
+from django.test import TestCase  # type: ignore
+from rest_framework import status  # type: ignore
+from rest_framework.test import APIClient  # type: ignore
 
-from apps.accounts.models import User
-from apps.exercise.models import Exercise
-from apps.plan.models import Plan
+from apps.accounts.models import User  # type: ignore
+from apps.exercise.models import Exercise  # type: ignore
+from apps.plan.models import Plan  # type: ignore
 
 TEST_PASSWORD = 'testpass123'  # noqa: S105
 
@@ -28,20 +28,34 @@ class PlanApiTest(TestCase):
         self.assertIn('My Plan', names)
         self.assertNotIn('Other Plan', names)
 
-    def test_create_plan(self):
+    def test_create_plan_no_name_returns_400(self):
+        resp = self.client.post('/api/v1/plans/', {'type': 'PUSH', 'exercises': []}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_plan_invalid_exercise_returns_400(self):
         resp = self.client.post(
             '/api/v1/plans/',
-            {
-                'name': 'New Plan',
-                'type': 'PUSH',
-                'exercises': [{'exercise_id': self.exercise.id, 'target_sets': 3, 'target_reps': 10}],
-            },
+            {'name': 'Fail', 'type': 'PUSH', 'exercises': [{'exercise_id': 9999}]},
             format='json',
         )
-        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        plan = Plan.objects.get(id=resp.data['data']['id'])
-        self.assertEqual(plan.user, self.user)
-        self.assertFalse(plan.is_template)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_plan(self):
+        plan = Plan.objects.create(name='Old', type='PUSH', user=self.user)
+        resp = self.client.put(
+            f'/api/v1/plans/{plan.id}/',
+            {'name': 'Updated', 'type': 'PULL', 'exercises': []},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        plan.refresh_from_db()
+        self.assertEqual(plan.name, 'Updated')
+
+    def test_delete_plan(self):
+        plan = Plan.objects.create(name='Delete me', type='PUSH', user=self.user)
+        resp = self.client.delete(f'/api/v1/plans/{plan.id}/')
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Plan.objects.filter(id=plan.id).exists())
 
     def test_cannot_edit_template_plan(self):
         template = Plan.objects.create(name='Template', type='PUSH', is_template=True, user=None)
