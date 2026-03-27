@@ -11,6 +11,8 @@ def create_session(data, user):
     date_value = data.get('date')
     if isinstance(date_value, str):
         date_value = date_type.fromisoformat(date_value)
+    if not date_value:
+        date_value = date_type.today()
 
     plan_id = data.get('plan_id')
     plan = None
@@ -63,6 +65,10 @@ def update_session(session_id, data, user):
     date_value = data.get('date')
     if isinstance(date_value, str):
         date_value = date_type.fromisoformat(date_value)
+
+    # If date is not provided in update, keep original session date
+    if not date_value:
+        date_value = session.date
 
     plan_id = data.get('plan_id')
     plan = None
