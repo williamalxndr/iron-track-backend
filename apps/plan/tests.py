@@ -6,12 +6,14 @@ from apps.accounts.models import User
 from apps.exercise.models import Exercise
 from apps.plan.models import Plan
 
+TEST_PASSWORD = 'testpass123'  # noqa: S105
+
 
 class PlanApiTest(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = User.objects.create_user(username='user1', password='testpass123')
-        self.other_user = User.objects.create_user(username='user2', password='testpass123')
+        self.user = User.objects.create_user(username='user1', password=TEST_PASSWORD)
+        self.other_user = User.objects.create_user(username='user2', password=TEST_PASSWORD)
         self.exercise = Exercise.objects.create(name='Squat', category='Quads')
         self.client.force_authenticate(user=self.user)
 

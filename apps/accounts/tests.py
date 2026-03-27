@@ -5,6 +5,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import User
 
+TEST_PASSWORD = 'testpass123'  # noqa: S105
+
 
 class RegisterViewTest(TestCase):
     def setUp(self):
@@ -25,7 +27,7 @@ class RegisterViewTest(TestCase):
         self.assertTrue(User.objects.filter(username='newuser').exists())
 
     def test_register_duplicate_username(self):
-        User.objects.create_user(username='taken', password='testpass123')
+        User.objects.create_user(username='taken', password=TEST_PASSWORD)
         resp = self.client.post(
             '/api/v1/auth/register/',
             {
@@ -60,7 +62,7 @@ class LoginViewTest(TestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password=TEST_PASSWORD,
             first_name='Test',
         )
 
@@ -91,7 +93,7 @@ class LoginViewTest(TestCase):
 class RefreshViewTest(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username='testuser', password=TEST_PASSWORD)
 
     def test_refresh_success(self):
         refresh = RefreshToken.for_user(self.user)
@@ -114,7 +116,7 @@ class MeViewTest(TestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password=TEST_PASSWORD,
             first_name='Test',
             email='test@test.com',
         )
