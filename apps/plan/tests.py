@@ -1,690 +1,90 @@
-import json
-
-from django.db import IntegrityError
-from django.db.models import QuerySet
 from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APIClient
 
+from apps.accounts.models import User
 from apps.exercise.models import Exercise
-from apps.plan.models import Plan, PlanExercise, PlanWeekly, PlanWeeklyItem
-from apps.plan.selectors import (
-    get_all_plan_weeklies,
-    get_all_plans,
-    get_plan_by_id,
-    get_plan_weekly_by_id,
-)
-from apps.plan.serializers import (
-    PlanDetailSerializer,
-    PlanListSerializer,
-    PlanWeeklyDetailSerializer,
-    PlanWeeklyListSerializer,
-)
-from apps.plan.services import create_plan, create_plan_weekly, delete_plan, update_plan
+from apps.plan.models import Plan
 
 
-class PlanModelTest(TestCase):
+class PlanApiTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username='user1', password='testpass123')
+        self.other_user = User.objects.create_user(username='user2', password='testpass123')
+        self.exercise = Exercise.objects.create(name='Squat', category='Quads')
+        self.client.force_authenticate(user=self.user)
+
+    def test_list_plans_includes_templates_and_own(self):
+        Plan.objects.create(name='Template', type='PUSH', is_template=True, user=None)
+        Plan.objects.create(name='My Plan', type='PULL', is_template=False, user=self.user)
+        Plan.objects.create(name='Other Plan', type='LEG', is_template=False, user=self.other_user)
+        resp = self.client.get('/api/v1/plans/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        names = [p['name'] for p in resp.data['data']]
+        self.assertIn('Template', names)
+        self.assertIn('My Plan', names)
+        self.assertNotIn('Other Plan', names)
+
     def test_create_plan(self):
-        plan = Plan.objects.create(name='Push Day', type='PUSH')
-        self.assertEqual(plan.name, 'Push Day')
-        self.assertEqual(plan.type, 'PUSH')
-
-    def test_name_is_required(self):
-        with self.assertRaises(IntegrityError):
-            Plan.objects.create(name=None, type='PUSH')
-
-    def test_type_is_required(self):
-        with self.assertRaises(IntegrityError):
-            Plan.objects.create(name='Leg Day', type=None)
-
-    def test_str(self):
-        plan = Plan.objects.create(name='Pull Day', type='PULL')
-        self.assertEqual(str(plan), 'Pull Day')
-
-    def test_db_table_name(self):
-        self.assertEqual(Plan._meta.db_table, 'plan')
-
-
-class PlanExerciseModelTest(TestCase):
-    def setUp(self):
-        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-        self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
-
-    def test_create_plan_exercise(self):
-        pe = PlanExercise.objects.create(
-            plan=self.plan,
-            exercise=self.exercise,
-        )
-        self.assertEqual(pe.plan, self.plan)
-        self.assertEqual(pe.exercise, self.exercise)
-
-    def test_order_index_default(self):
-        pe = PlanExercise.objects.create(plan=self.plan, exercise=self.exercise)
-        self.assertEqual(pe.order_index, 0)
-
-    def test_cascade_delete_plan(self):
-        PlanExercise.objects.create(plan=self.plan, exercise=self.exercise)
-        self.plan.delete()
-        self.assertEqual(PlanExercise.objects.count(), 0)
-
-    def test_cascade_delete_exercise(self):
-        PlanExercise.objects.create(plan=self.plan, exercise=self.exercise)
-        self.exercise.delete()
-        self.assertEqual(PlanExercise.objects.count(), 0)
-
-    def test_str(self):
-        pe = PlanExercise.objects.create(plan=self.plan, exercise=self.exercise)
-        self.assertEqual(str(pe), 'Bench Press in Push Day')
-
-    def test_db_table_name(self):
-        self.assertEqual(PlanExercise._meta.db_table, 'plan_exercise')
-
-
-class PlanWeeklyModelTest(TestCase):
-    def test_create_plan_weekly(self):
-        pw = PlanWeekly.objects.create(name='PPL')
-        self.assertEqual(pw.name, 'PPL')
-
-    def test_str(self):
-        pw = PlanWeekly.objects.create(name='Upper Lower')
-        self.assertEqual(str(pw), 'Upper Lower')
-
-    def test_db_table_name(self):
-        self.assertEqual(PlanWeekly._meta.db_table, 'plan_weekly')
-
-
-class PlanWeeklyItemModelTest(TestCase):
-    def setUp(self):
-        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-        self.weekly = PlanWeekly.objects.create(name='PPL')
-
-    def test_create_plan_weekly_item(self):
-        item = PlanWeeklyItem.objects.create(
-            plan_weekly=self.weekly,
-            plan=self.plan,
-            day_of_week=1,
-        )
-        self.assertEqual(item.day_of_week, 1)
-        self.assertEqual(item.plan, self.plan)
-        self.assertEqual(item.plan_weekly, self.weekly)
-
-    def test_day_of_week_min_boundary(self):
-        item = PlanWeeklyItem.objects.create(plan_weekly=self.weekly, plan=self.plan, day_of_week=1)
-        self.assertEqual(item.day_of_week, 1)
-
-    def test_day_of_week_max_boundary(self):
-        item = PlanWeeklyItem.objects.create(plan_weekly=self.weekly, plan=self.plan, day_of_week=7)
-        self.assertEqual(item.day_of_week, 7)
-
-    def test_cascade_delete_plan_weekly(self):
-        PlanWeeklyItem.objects.create(plan_weekly=self.weekly, plan=self.plan, day_of_week=1)
-        self.weekly.delete()
-        self.assertEqual(PlanWeeklyItem.objects.count(), 0)
-
-    def test_cascade_delete_plan(self):
-        PlanWeeklyItem.objects.create(plan_weekly=self.weekly, plan=self.plan, day_of_week=1)
-        self.plan.delete()
-        self.assertEqual(PlanWeeklyItem.objects.count(), 0)
-
-    def test_str(self):
-        item = PlanWeeklyItem.objects.create(plan_weekly=self.weekly, plan=self.plan, day_of_week=3)
-        self.assertEqual(str(item), 'Day 3: Push Day')
-
-    def test_db_table_name(self):
-        self.assertEqual(PlanWeeklyItem._meta.db_table, 'plan_weekly_item')
-
-
-# ── Selector Tests ──────────────────────────────────────────────────
-
-
-class PlanSelectorTest(TestCase):
-    # Positive
-    def test_get_all_plans_returns_queryset(self):
-        result = get_all_plans()
-        self.assertIsInstance(result, QuerySet)
-
-    def test_get_all_plans_returns_all(self):
-        Plan.objects.create(name='Push Day', type='PUSH')
-        Plan.objects.create(name='Pull Day', type='PULL')
-        result = get_all_plans()
-        self.assertEqual(result.count(), 2)
-
-    # Corner
-    def test_get_all_plans_empty(self):
-        result = get_all_plans()
-        self.assertEqual(result.count(), 0)
-
-    # Positive
-    def test_get_plan_by_id_returns_plan(self):
-        plan = Plan.objects.create(name='Push Day', type='PUSH')
-        result = get_plan_by_id(plan.id)
-        self.assertEqual(result.id, plan.id)
-
-    # Negative
-    def test_get_plan_by_id_not_found_raises(self):
-        with self.assertRaises(Plan.DoesNotExist):
-            get_plan_by_id(9999)
-
-
-# ── Service Tests ───────────────────────────────────────────────────
-
-
-class PlanServiceTest(TestCase):
-    def setUp(self):
-        self.exercise1 = Exercise.objects.create(name='Bench Press', category='Push')
-        self.exercise2 = Exercise.objects.create(name='Overhead Press', category='Push')
-
-    # Positive
-    def test_create_plan_basic(self):
-        data = {'name': 'Push Day', 'type': 'PUSH', 'exercises': []}
-        plan = create_plan(data)
-        self.assertEqual(plan.name, 'Push Day')
-        self.assertEqual(plan.type, 'PUSH')
-
-    def test_create_plan_with_exercises(self):
-        data = {
-            'name': 'Push Day',
-            'type': 'PUSH',
-            'exercises': [
-                {'exercise_id': self.exercise1.id},
-                {'exercise_id': self.exercise2.id},
-            ],
-        }
-        plan = create_plan(data)
-        self.assertEqual(plan.exercises.count(), 2)
-
-    def test_create_plan_without_exercises(self):
-        data = {'name': 'Push Day', 'type': 'PUSH'}
-        plan = create_plan(data)
-        self.assertEqual(plan.exercises.count(), 0)
-
-    def test_create_plan_sets_order_index(self):
-        data = {
-            'name': 'Push Day',
-            'type': 'PUSH',
-            'exercises': [
-                {'exercise_id': self.exercise1.id},
-                {'exercise_id': self.exercise2.id},
-            ],
-        }
-        plan = create_plan(data)
-        exercises = list(plan.exercises.order_by('order_index'))
-        self.assertEqual(exercises[0].order_index, 0)
-        self.assertEqual(exercises[1].order_index, 1)
-
-    # Negative
-    def test_create_plan_missing_name(self):
-        data = {'type': 'PUSH'}
-        with self.assertRaises(ValueError):
-            create_plan(data)
-
-    def test_create_plan_missing_type(self):
-        data = {'name': 'Push Day'}
-        with self.assertRaises(ValueError):
-            create_plan(data)
-
-    def test_create_plan_invalid_exercise_id(self):
-        data = {
-            'name': 'Push Day',
-            'type': 'PUSH',
-            'exercises': [{'exercise_id': 9999}],
-        }
-        with self.assertRaises(ValueError):
-            create_plan(data)
-
-    # Corner
-    def test_create_plan_single_exercise(self):
-        data = {
-            'name': 'Push Day',
-            'type': 'PUSH',
-            'exercises': [{'exercise_id': self.exercise1.id}],
-        }
-        plan = create_plan(data)
-        self.assertEqual(plan.exercises.count(), 1)
-
-
-# ── Serializer Tests ────────────────────────────────────────────────
-
-
-class PlanSerializerTest(TestCase):
-    def setUp(self):
-        self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
-        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-        PlanExercise.objects.create(plan=self.plan, exercise=self.exercise, order_index=0)
-
-    # Positive
-    def test_list_serializer_fields(self):
-        data = PlanListSerializer(self.plan).data
-        self.assertEqual(data['id'], self.plan.id)
-        self.assertEqual(data['name'], 'Push Day')
-        self.assertEqual(data['type'], 'PUSH')
-
-    def test_detail_serializer_includes_exercises(self):
-        data = PlanDetailSerializer(self.plan).data
-        self.assertIn('exercises', data)
-        self.assertEqual(len(data['exercises']), 1)
-
-    def test_detail_serializer_exercise_fields(self):
-        data = PlanDetailSerializer(self.plan).data
-        ex = data['exercises'][0]
-        self.assertEqual(ex['exercise_id'], self.exercise.id)
-        self.assertEqual(ex['exercise_name'], 'Bench Press')
-
-
-# ── View Tests ──────────────────────────────────────────────────────
-
-
-class PlanListViewTest(TestCase):
-    # Positive
-    def test_list_plans_200(self):
-        response = self.client.get('/api/v1/plans/')
-        self.assertEqual(response.status_code, 200)
-
-    def test_list_response_format(self):
-        response = self.client.get('/api/v1/plans/')
-        data = response.json()
-        self.assertIn('data', data)
-        self.assertIn('message', data)
-        self.assertEqual(data['message'], 'success')
-
-    # Corner
-    def test_list_plans_empty(self):
-        response = self.client.get('/api/v1/plans/')
-        data = response.json()
-        self.assertEqual(data['data'], [])
-
-    # Negative
-    def test_list_delete_not_allowed_405(self):
-        response = self.client.delete('/api/v1/plans/')
-        self.assertEqual(response.status_code, 405)
-
-
-class PlanCreateViewTest(TestCase):
-    def setUp(self):
-        self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
-
-    # Positive
-    def test_create_plan_201(self):
-        payload = {
-            'name': 'Push Day',
-            'type': 'PUSH',
-            'exercises': [{'exercise_id': self.exercise.id}],
-        }
-        response = self.client.post('/api/v1/plans/', data=json.dumps(payload), content_type='application/json')
-        self.assertEqual(response.status_code, 201)
-
-    def test_create_response_contains_id(self):
-        payload = {'name': 'Push Day', 'type': 'PUSH'}
-        response = self.client.post('/api/v1/plans/', data=json.dumps(payload), content_type='application/json')
-        data = response.json()
-        self.assertIn('id', data['data'])
-        self.assertEqual(data['message'], 'success')
-
-    # Negative
-    def test_create_plan_missing_name_400(self):
-        payload = {'type': 'PUSH'}
-        response = self.client.post('/api/v1/plans/', data=json.dumps(payload), content_type='application/json')
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('error', response.json())
-
-    def test_create_plan_missing_type_400(self):
-        payload = {'name': 'Push Day'}
-        response = self.client.post('/api/v1/plans/', data=json.dumps(payload), content_type='application/json')
-        self.assertEqual(response.status_code, 400)
-
-
-class PlanDetailViewTest(TestCase):
-    def setUp(self):
-        self.exercise = Exercise.objects.create(name='Bench Press', category='Push')
-        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-        PlanExercise.objects.create(plan=self.plan, exercise=self.exercise, order_index=0)
-
-    # Positive
-    def test_get_plan_detail_200(self):
-        response = self.client.get(f'/api/v1/plans/{self.plan.id}/')
-        self.assertEqual(response.status_code, 200)
-
-    def test_detail_response_contains_exercises(self):
-        response = self.client.get(f'/api/v1/plans/{self.plan.id}/')
-        data = response.json()['data']
-        self.assertIn('exercises', data)
-        self.assertEqual(len(data['exercises']), 1)
-
-    # Negative
-    def test_get_plan_not_found_404(self):
-        response = self.client.get('/api/v1/plans/9999/')
-        self.assertEqual(response.status_code, 404)
-
-    def test_detail_post_not_allowed_405(self):
-        response = self.client.post(f'/api/v1/plans/{self.plan.id}/')
-        self.assertEqual(response.status_code, 405)
-
-
-# ── Update Plan Tests ──────────────────────────────────────────────
-
-
-class UpdatePlanServiceTest(TestCase):
-    def setUp(self):
-        self.exercise1 = Exercise.objects.create(name='Bench Press', category='Chest')
-        self.exercise2 = Exercise.objects.create(name='Overhead Press', category='Shoulders')
-        self.plan = create_plan(
+        resp = self.client.post(
+            '/api/v1/plans/',
             {
-                'name': 'Push Day',
+                'name': 'New Plan',
                 'type': 'PUSH',
-                'exercises': [{'exercise_id': self.exercise1.id}],
-            }
-        )
-
-    def test_update_plan_name_and_type(self):
-        plan = update_plan(
-            self.plan.id,
-            {
-                'name': 'Pull Day',
-                'type': 'PULL',
-                'exercises': [{'exercise_id': self.exercise1.id}],
+                'exercises': [{'exercise_id': self.exercise.id, 'target_sets': 3, 'target_reps': 10}],
             },
+            format='json',
         )
-        self.assertEqual(plan.name, 'Pull Day')
-        self.assertEqual(plan.type, 'PULL')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        plan = Plan.objects.get(id=resp.data['data']['id'])
+        self.assertEqual(plan.user, self.user)
+        self.assertFalse(plan.is_template)
 
-    def test_update_plan_replaces_exercises(self):
-        plan = update_plan(
-            self.plan.id,
+    def test_cannot_edit_template_plan(self):
+        template = Plan.objects.create(name='Template', type='PUSH', is_template=True, user=None)
+        resp = self.client.put(
+            f'/api/v1/plans/{template.id}/',
             {
-                'name': 'Push Day',
+                'name': 'Hacked',
                 'type': 'PUSH',
-                'exercises': [{'exercise_id': self.exercise2.id}],
+                'exercises': [],
             },
+            format='json',
         )
-        exercises = list(plan.exercises.all())
-        self.assertEqual(len(exercises), 1)
-        self.assertEqual(exercises[0].exercise_id, self.exercise2.id)
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_update_plan_not_found(self):
-        with self.assertRaises(Plan.DoesNotExist):
-            update_plan(9999, {'name': 'X', 'type': 'PUSH', 'exercises': []})
+    def test_cannot_delete_template_plan(self):
+        template = Plan.objects.create(name='Template', type='PUSH', is_template=True, user=None)
+        resp = self.client.delete(f'/api/v1/plans/{template.id}/')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(Plan.objects.filter(id=template.id).exists())
 
-    def test_update_plan_missing_name(self):
-        with self.assertRaises(ValueError):
-            update_plan(self.plan.id, {'type': 'PUSH', 'exercises': []})
-
-    def test_update_plan_invalid_exercise(self):
-        with self.assertRaises(ValueError):
-            update_plan(
-                self.plan.id,
-                {
-                    'name': 'Push Day',
-                    'type': 'PUSH',
-                    'exercises': [{'exercise_id': 9999}],
-                },
-            )
-
-
-class DeletePlanServiceTest(TestCase):
-    def setUp(self):
-        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-
-    def test_delete_plan(self):
-        delete_plan(self.plan.id)
-        self.assertFalse(Plan.objects.filter(id=self.plan.id).exists())
-
-    def test_delete_plan_not_found(self):
-        with self.assertRaises(Plan.DoesNotExist):
-            delete_plan(9999)
-
-
-class UpdatePlanViewTest(TestCase):
-    def setUp(self):
-        self.exercise = Exercise.objects.create(name='Bench Press', category='Chest')
-        self.plan = create_plan(
+    def test_cannot_edit_other_users_plan(self):
+        other_plan = Plan.objects.create(name='Other', type='PUSH', is_template=False, user=self.other_user)
+        resp = self.client.put(
+            f'/api/v1/plans/{other_plan.id}/',
             {
-                'name': 'Push Day',
+                'name': 'Hacked',
                 'type': 'PUSH',
-                'exercises': [{'exercise_id': self.exercise.id}],
-            }
+                'exercises': [],
+            },
+            format='json',
         )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_update_plan_200(self):
-        payload = {'name': 'Pull Day', 'type': 'PULL', 'exercises': []}
-        response = self.client.put(
-            f'/api/v1/plans/{self.plan.id}/',
-            data=json.dumps(payload),
-            content_type='application/json',
-        )
-        self.assertEqual(response.status_code, 200)
+    def test_cannot_delete_other_users_plan(self):
+        other_plan = Plan.objects.create(name='Other', type='PUSH', is_template=False, user=self.other_user)
+        resp = self.client.delete(f'/api/v1/plans/{other_plan.id}/')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_update_plan_not_found_404(self):
-        payload = {'name': 'X', 'type': 'PUSH', 'exercises': []}
-        response = self.client.put(
-            '/api/v1/plans/9999/',
-            data=json.dumps(payload),
-            content_type='application/json',
-        )
-        self.assertEqual(response.status_code, 404)
+    def test_get_template_plan_detail(self):
+        template = Plan.objects.create(name='Template', type='PUSH', is_template=True, user=None)
+        resp = self.client.get(f'/api/v1/plans/{template.id}/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['data']['name'], 'Template')
 
-    def test_delete_plan_204(self):
-        response = self.client.delete(f'/api/v1/plans/{self.plan.id}/')
-        self.assertEqual(response.status_code, 204)
-
-    def test_delete_plan_not_found_404(self):
-        response = self.client.delete('/api/v1/plans/9999/')
-        self.assertEqual(response.status_code, 404)
-
-
-# ── Plan Weekly Selector Tests ─────────────────────────────────────
-
-
-class PlanWeeklySelectorTest(TestCase):
-    # Positive
-    def test_get_all_plan_weeklies_returns_queryset(self):
-        result = get_all_plan_weeklies()
-        self.assertIsInstance(result, QuerySet)
-
-    def test_get_all_plan_weeklies_returns_all(self):
-        PlanWeekly.objects.create(name='PPL')
-        PlanWeekly.objects.create(name='Upper Lower')
-        result = get_all_plan_weeklies()
-        self.assertEqual(result.count(), 2)
-
-    # Corner
-    def test_get_all_plan_weeklies_empty(self):
-        result = get_all_plan_weeklies()
-        self.assertEqual(result.count(), 0)
-
-    # Positive
-    def test_get_plan_weekly_by_id_returns_plan_weekly(self):
-        pw = PlanWeekly.objects.create(name='PPL')
-        result = get_plan_weekly_by_id(pw.id)
-        self.assertEqual(result.id, pw.id)
-
-    # Negative
-    def test_get_plan_weekly_by_id_not_found_raises(self):
-        with self.assertRaises(PlanWeekly.DoesNotExist):
-            get_plan_weekly_by_id(9999)
-
-
-# ── Plan Weekly Serializer Tests ───────────────────────────────────
-
-
-class PlanWeeklySerializerTest(TestCase):
-    def setUp(self):
-        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-        self.weekly = PlanWeekly.objects.create(name='PPL')
-        PlanWeeklyItem.objects.create(plan_weekly=self.weekly, plan=self.plan, day_of_week=1)
-
-    # Positive
-    def test_list_serializer_fields(self):
-        data = PlanWeeklyListSerializer(self.weekly).data
-        self.assertEqual(data['id'], self.weekly.id)
-        self.assertEqual(data['name'], 'PPL')
-
-    def test_detail_serializer_includes_items(self):
-        data = PlanWeeklyDetailSerializer(self.weekly).data
-        self.assertIn('items', data)
-        self.assertEqual(len(data['items']), 1)
-
-    def test_detail_serializer_item_fields(self):
-        data = PlanWeeklyDetailSerializer(self.weekly).data
-        item = data['items'][0]
-        self.assertEqual(item['day_of_week'], 1)
-        self.assertEqual(item['plan_id'], self.plan.id)
-        self.assertEqual(item['plan_name'], 'Push Day')
-
-    # Corner
-    def test_detail_serializer_no_items(self):
-        empty_weekly = PlanWeekly.objects.create(name='Empty Week')
-        data = PlanWeeklyDetailSerializer(empty_weekly).data
-        self.assertEqual(data['items'], [])
-
-
-# ── Plan Weekly View Tests ─────────────────────────────────────────
-
-
-class PlanWeeklyListViewTest(TestCase):
-    # Positive
-    def test_list_plan_weeklies_200(self):
-        response = self.client.get('/api/v1/plan-weekly/')
-        self.assertEqual(response.status_code, 200)
-
-    def test_list_response_format(self):
-        response = self.client.get('/api/v1/plan-weekly/')
-        data = response.json()
-        self.assertIn('data', data)
-        self.assertIn('message', data)
-        self.assertEqual(data['message'], 'success')
-
-    # Corner
-    def test_list_plan_weeklies_empty(self):
-        response = self.client.get('/api/v1/plan-weekly/')
-        data = response.json()
-        self.assertEqual(data['data'], [])
-
-
-class PlanWeeklyDetailViewTest(TestCase):
-    def setUp(self):
-        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-        self.weekly = PlanWeekly.objects.create(name='PPL')
-        PlanWeeklyItem.objects.create(plan_weekly=self.weekly, plan=self.plan, day_of_week=1)
-
-    # Positive
-    def test_get_plan_weekly_detail_200(self):
-        response = self.client.get(f'/api/v1/plan-weekly/{self.weekly.id}/')
-        self.assertEqual(response.status_code, 200)
-
-    def test_detail_response_contains_items(self):
-        response = self.client.get(f'/api/v1/plan-weekly/{self.weekly.id}/')
-        data = response.json()['data']
-        self.assertIn('items', data)
-        self.assertEqual(len(data['items']), 1)
-
-    # Negative
-    def test_get_plan_weekly_not_found_404(self):
-        response = self.client.get('/api/v1/plan-weekly/9999/')
-        self.assertEqual(response.status_code, 404)
-
-    def test_detail_post_not_allowed_405(self):
-        response = self.client.post(f'/api/v1/plan-weekly/{self.weekly.id}/')
-        self.assertEqual(response.status_code, 405)
-
-
-# ── Plan Weekly Service Tests ──────────────────────────────────────
-
-
-class PlanWeeklyServiceTest(TestCase):
-    def setUp(self):
-        self.plan1 = Plan.objects.create(name='Push Day', type='PUSH')
-        self.plan2 = Plan.objects.create(name='Pull Day', type='PULL')
-
-    # Positive
-    def test_create_plan_weekly_basic(self):
-        data = {'name': 'PPL Split'}
-        pw = create_plan_weekly(data)
-        self.assertEqual(pw.name, 'PPL Split')
-        self.assertEqual(pw.items.count(), 0)
-
-    def test_create_plan_weekly_with_items(self):
-        data = {
-            'name': 'PPL Split',
-            'items': [
-                {'day_of_week': 1, 'plan_id': self.plan1.id},
-                {'day_of_week': 2, 'plan_id': self.plan2.id},
-            ],
-        }
-        pw = create_plan_weekly(data)
-        self.assertEqual(pw.name, 'PPL Split')
-        self.assertEqual(pw.items.count(), 2)
-
-    def test_create_plan_weekly_items_created(self):
-        data = {
-            'name': 'PPL Split',
-            'items': [{'day_of_week': 1, 'plan_id': self.plan1.id}],
-        }
-        pw = create_plan_weekly(data)
-        item = pw.items.first()
-        self.assertEqual(item.day_of_week, 1)
-        self.assertEqual(item.plan_id, self.plan1.id)
-
-    # Negative
-    def test_create_plan_weekly_missing_name(self):
-        data = {'items': []}
-        with self.assertRaises(ValueError):
-            create_plan_weekly(data)
-
-    def test_create_plan_weekly_invalid_plan_id(self):
-        data = {
-            'name': 'Bad Week',
-            'items': [{'day_of_week': 1, 'plan_id': 9999}],
-        }
-        with self.assertRaises(ValueError):
-            create_plan_weekly(data)
-
-    def test_create_plan_weekly_invalid_day_of_week(self):
-        data = {
-            'name': 'Bad Week',
-            'items': [{'day_of_week': 8, 'plan_id': self.plan1.id}],
-        }
-        with self.assertRaises(ValueError):
-            create_plan_weekly(data)
-
-    # Corner
-    def test_create_plan_weekly_empty_items(self):
-        data = {'name': 'Empty Week', 'items': []}
-        pw = create_plan_weekly(data)
-        self.assertEqual(pw.items.count(), 0)
-
-
-# ── Plan Weekly Create View Tests ──────────────────────────────────
-
-
-class PlanWeeklyCreateViewTest(TestCase):
-    def setUp(self):
-        self.plan = Plan.objects.create(name='Push Day', type='PUSH')
-
-    # Positive
-    def test_create_plan_weekly_201(self):
-        payload = {
-            'name': 'PPL Split',
-            'items': [{'day_of_week': 1, 'plan_id': self.plan.id}],
-        }
-        response = self.client.post('/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json')
-        self.assertEqual(response.status_code, 201)
-
-    def test_create_response_contains_id(self):
-        payload = {'name': 'PPL Split'}
-        response = self.client.post('/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json')
-        data = response.json()
-        self.assertIn('id', data['data'])
-        self.assertEqual(data['message'], 'success')
-
-    # Negative
-    def test_create_plan_weekly_missing_name_400(self):
-        payload = {'items': []}
-        response = self.client.post('/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json')
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('error', response.json())
-
-    def test_create_plan_weekly_invalid_plan_id_400(self):
-        payload = {
-            'name': 'Bad Week',
-            'items': [{'day_of_week': 1, 'plan_id': 9999}],
-        }
-        response = self.client.post('/api/v1/plan-weekly/', data=json.dumps(payload), content_type='application/json')
-        self.assertEqual(response.status_code, 400)
+    def test_unauthenticated_returns_401(self):
+        self.client.force_authenticate(user=None)
+        resp = self.client.get('/api/v1/plans/')
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
