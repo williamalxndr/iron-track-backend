@@ -1,10 +1,10 @@
 from rest_framework import serializers
 
-from apps.workout.models import ExerciseLog, SetLog, WorkoutSession
+from .models import ExerciseLog, SetLog, WorkoutSession
 
 
 class SessionListSerializer(serializers.ModelSerializer):
-    total_volume = serializers.FloatField(read_only=True, default=None)
+    total_volume = serializers.FloatField(read_only=True)
 
     class Meta:
         model = WorkoutSession

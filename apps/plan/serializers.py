@@ -1,12 +1,12 @@
 from rest_framework import serializers
 
-from apps.plan.models import Plan, PlanExercise, PlanWeekly, PlanWeeklyItem
+from .models import Plan, PlanExercise, PlanWeekly, PlanWeeklyItem
 
 
 class PlanListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Plan
-        fields = ['id', 'name', 'type']
+        fields = ['id', 'name', 'type', 'is_template']
 
 
 class PlanExerciseDetailSerializer(serializers.ModelSerializer):
@@ -15,7 +15,7 @@ class PlanExerciseDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PlanExercise
-        fields = ['exercise_id', 'exercise_name']
+        fields = ['exercise_id', 'exercise_name', 'order_index']
 
 
 class PlanDetailSerializer(serializers.ModelSerializer):
@@ -23,13 +23,13 @@ class PlanDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Plan
-        fields = ['id', 'name', 'type', 'exercises']
+        fields = ['id', 'name', 'type', 'is_template', 'exercises']
 
 
 class PlanWeeklyListSerializer(serializers.ModelSerializer):
     class Meta:
         model = PlanWeekly
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'is_template']
 
 
 class PlanWeeklyItemSerializer(serializers.ModelSerializer):
@@ -38,7 +38,7 @@ class PlanWeeklyItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PlanWeeklyItem
-        fields = ['day_of_week', 'plan_id', 'plan_name']
+        fields = ['plan_id', 'plan_name', 'day_of_week']
 
 
 class PlanWeeklyDetailSerializer(serializers.ModelSerializer):
@@ -46,4 +46,4 @@ class PlanWeeklyDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PlanWeekly
-        fields = ['id', 'name', 'items']
+        fields = ['id', 'name', 'is_template', 'items']

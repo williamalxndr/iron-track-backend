@@ -3,14 +3,9 @@ from typing import TypedDict
 
 from django.core.management.base import BaseCommand  # type: ignore
 
+from apps.accounts.models import User  # type: ignore
 from apps.exercise.models import Exercise  # type: ignore
 from apps.workout.services import create_session  # type: ignore
-
-
-class ExerciseTemplate(TypedDict):
-    name: str
-    base_weight: float
-    sets: list[tuple[float, int]]
 
 
 class DayTemplate(TypedDict):
@@ -33,72 +28,79 @@ PUSH_DAY: DayTemplate = {
 PULL_DAY: DayTemplate = {
     'day_in_week': 2,  # Wednesday
     'exercises': [
-        ('Deadlift', 100.0, [(0, 5), (10, 3), (20, 1)]),
-        ('Barbell Row', 50.0, [(0, 10), (5, 8), (5, 7)]),
-        ('Pull-up', 0.0, [(0, 10), (0, 8), (0, 6)]),
-        ('Face Pull', 12.5, [(0, 15), (0, 15)]),
-        ('Dumbbell Curl', 10.0, [(0, 12), (2, 10), (2, 8)]),
+        ('Deadlift', 100.0, [(0, 5), (10, 3), (10, 2)]),
+        ('Barbell Row', 60.0, [(0, 8), (5, 6), (5, 5)]),
+        ('Pull-up', 0.0, [(0, 8), (0, 7), (0, 6)]),
+        ('Face Pull', 15.0, [(0, 15), (0, 12), (0, 12)]),
+        ('Dumbbell Curl', 12.0, [(0, 12), (2, 10), (2, 8)]),
     ],
 }
 
 LEG_DAY: DayTemplate = {
     'day_in_week': 4,  # Friday
     'exercises': [
-        ('Squat', 80.0, [(0, 8), (10, 5), (10, 5)]),
-        ('Leg Press', 140.0, [(0, 10), (20, 8), (20, 8)]),
-        ('Romanian Deadlift', 60.0, [(0, 10), (0, 10), (0, 8)]),
-        ('Leg Curl', 30.0, [(0, 12), (0, 12)]),
+        ('Squat', 80.0, [(0, 8), (10, 5), (10, 4)]),
+        ('Leg Press', 120.0, [(0, 12), (20, 10), (20, 8)]),
+        ('Romanian Deadlift', 60.0, [(0, 10), (5, 8), (5, 8)]),
+        ('Leg Curl', 30.0, [(0, 12), (0, 12), (0, 10)]),
         ('Calf Raise', 40.0, [(0, 15), (0, 15), (0, 12)]),
     ],
 }
 
 WEEKLY_TEMPLATES: list[DayTemplate] = [PUSH_DAY, PULL_DAY, LEG_DAY]
-NUM_WEEKS = 8
 
-# Weekly weight progression per exercise (kg added per week)
-WEEKLY_INCREMENT = 2.5
+DEMO_USERNAME = 'william'
+DEMO_PASSWORD = 'irontrack123'  # noqa: S105
 
 
 class Command(BaseCommand):
-    help = 'Seed 8 weeks of demo workout sessions (requires exercises to be seeded first)'
+    help = 'Seed demo user and 8 weeks of workout sessions'
 
     def handle(self, *args, **options):
+        # Create or get demo user
+        user, user_created = User.objects.get_or_create(
+            username=DEMO_USERNAME,
+            defaults={
+                'first_name': 'William',
+                'email': 'william@irontrack.dev',
+            },
+        )
+        if user_created:
+            user.set_password(DEMO_PASSWORD)
+            user.save()
+            self.stdout.write(self.style.SUCCESS(f'Created demo user: {DEMO_USERNAME}'))
+        else:
+            self.stdout.write(f'Demo user already exists: {DEMO_USERNAME}')
+
+        # Generate 8 weeks of sessions
         today = date.today()
-        start_monday = today - timedelta(days=today.weekday()) - timedelta(days=(NUM_WEEKS - 1) * 7)
-        created_count = 0
+        weeks = 8
+        start_monday = today - timedelta(days=today.weekday()) - timedelta(weeks=weeks)
+        sessions_created = 0
 
-        if not Exercise.objects.exists():
-            self.stderr.write(self.style.ERROR('No exercises found in database. Please run seed_exercises first.'))
-            return
-
-        for week in range(NUM_WEEKS):
-            # timedelta(weeks=...) is valid, but let's be explicit with days for clarity if needed
-            week_monday = start_monday + timedelta(days=week * 7)
-            progression = float(week * WEEKLY_INCREMENT)
+        for week_num in range(weeks):
+            week_monday = start_monday + timedelta(weeks=week_num)
+            progression = week_num * 2.5
 
             for template in WEEKLY_TEMPLATES:
                 day_offset = int(template['day_in_week'])
-                session_date: date = week_monday + timedelta(days=day_offset)
+                session_date = week_monday + timedelta(days=day_offset)
 
                 if session_date > today:
                     continue
 
                 exercises_payload = []
-                exercises_in_template = template['exercises']
-                for exercise_item in exercises_in_template:
+                for exercise_item in template['exercises']:
                     exercise_name, base_weight, sets_template = exercise_item
                     try:
                         exercise = Exercise.objects.get(name=exercise_name)
                     except Exercise.DoesNotExist:
-                        self.stderr.write(
-                            self.style.WARNING(f'Exercise "{exercise_name}" not found — skipping this exercise')
-                        )
+                        self.stderr.write(self.style.WARNING(f'Exercise "{exercise_name}" not found — skipping'))
                         continue
 
                     sets = []
                     for offset_kg, reps in sets_template:
                         weight = float(base_weight) + float(offset_kg) + progression
-                        # round() with ndigits is standard, but IDE is confused
                         sets.append({'weight': round(weight, 1), 'reps': int(reps)})  # type: ignore
 
                     exercises_payload.append(
@@ -108,12 +110,11 @@ class Command(BaseCommand):
                         }
                     )
 
-                create_session(
-                    {
-                        'date': str(session_date),
-                        'exercises': exercises_payload,
-                    }
-                )
-                created_count += 1
+                if exercises_payload:
+                    create_session(
+                        {'date': str(session_date), 'exercises': exercises_payload},
+                        user=user,
+                    )
+                    sessions_created += 1
 
-        self.stdout.write(self.style.SUCCESS(f'Seeded {created_count} demo sessions across {NUM_WEEKS} weeks'))
+        self.stdout.write(self.style.SUCCESS(f'Created {sessions_created} workout sessions'))

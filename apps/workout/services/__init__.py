@@ -1,31 +1,14 @@
 from datetime import date as date_type
 
-from django.db import transaction  # type: ignore
+from django.db import transaction
 
 from apps.exercise.models import Exercise  # type: ignore
 from apps.plan.models import Plan  # type: ignore
 from apps.workout.models import ExerciseLog, SetLog, WorkoutSession  # type: ignore
 
 
-def create_session(data):
+def create_session(data, user):
     date_value = data.get('date')
-    if not date_value:
-        raise ValueError('date is required')
-
-    exercises = data.get('exercises')
-    if not exercises:
-        raise ValueError('exercises is required')
-
-    # Validate all exercise IDs exist and sets are non-empty
-    exercise_ids = [e['exercise_id'] for e in exercises]
-    existing_ids = set(Exercise.objects.filter(id__in=exercise_ids).values_list('id', flat=True))
-    for ex in exercises:
-        if ex['exercise_id'] not in existing_ids:
-            raise ValueError(f'Exercise with id {ex["exercise_id"]} does not exist')
-        if not ex.get('sets'):
-            raise ValueError('Each exercise must have at least one set')
-
-    # Parse date if string
     if isinstance(date_value, str):
         date_value = date_type.fromisoformat(date_value)
 
@@ -37,23 +20,36 @@ def create_session(data):
         except Plan.DoesNotExist:
             raise ValueError(f'Plan with id {plan_id} does not exist') from None
 
+    exercises = data.get('exercises', [])
+
     with transaction.atomic():
         session = WorkoutSession.objects.create(
+            user=user,
             date=date_value,
             plan=plan,
         )
 
-        for order_index, ex_data in enumerate(exercises):
-            exercise_log = ExerciseLog.objects.create(
+        for i, ex_data in enumerate(exercises):
+            exercise_id = ex_data.get('exercise_id')
+            try:
+                exercise = Exercise.objects.get(id=exercise_id)
+            except Exercise.DoesNotExist:
+                raise ValueError(f'Exercise with id {exercise_id} does not exist') from None
+
+            sets = ex_data.get('sets', [])
+            if not sets:
+                raise ValueError(f'Exercise {exercise.name} must have at least one set')
+
+            log = ExerciseLog.objects.create(
                 session=session,
-                exercise_id=ex_data['exercise_id'],
-                order_index=order_index,
+                exercise=exercise,
+                order_index=i,
             )
 
-            for set_number, set_data in enumerate(ex_data['sets'], start=1):
+            for j, set_data in enumerate(sets):
                 SetLog.objects.create(
-                    exercise_log=exercise_log,
-                    set_number=set_number,
+                    exercise_log=log,
+                    set_number=j + 1,
                     weight=set_data['weight'],
                     reps=set_data['reps'],
                 )
@@ -61,32 +57,10 @@ def create_session(data):
     return session
 
 
-def delete_session(session_id):
-    session = WorkoutSession.objects.get(id=session_id)
-    session.delete()
-
-
-def update_session(session_id, data):
-    session = WorkoutSession.objects.get(id=session_id)
+def update_session(session_id, data, user):
+    session = WorkoutSession.objects.get(id=session_id, user=user)
 
     date_value = data.get('date')
-    if not date_value:
-        raise ValueError('date is required')
-
-    exercises = data.get('exercises')
-    if not exercises:
-        raise ValueError('exercises is required')
-
-    # Validate all exercise IDs exist and sets are non-empty
-    exercise_ids = [e['exercise_id'] for e in exercises]
-    existing_ids = set(Exercise.objects.filter(id__in=exercise_ids).values_list('id', flat=True))
-    for ex in exercises:
-        if ex['exercise_id'] not in existing_ids:
-            raise ValueError(f'Exercise with id {ex["exercise_id"]} does not exist')
-        if not ex.get('sets'):
-            raise ValueError('Each exercise must have at least one set')
-
-    # Parse date if string
     if isinstance(date_value, str):
         date_value = date_type.fromisoformat(date_value)
 
@@ -103,22 +77,37 @@ def update_session(session_id, data):
         session.plan = plan
         session.save()
 
-        # Delete old exercise logs (cascades to set logs)
+        # Replace exercise logs
         session.exercise_logs.all().delete()
 
-        for order_index, ex_data in enumerate(exercises):
-            exercise_log = ExerciseLog.objects.create(
+        for i, ex_data in enumerate(data.get('exercises', [])):
+            exercise_id = ex_data.get('exercise_id')
+            try:
+                exercise = Exercise.objects.get(id=exercise_id)
+            except Exercise.DoesNotExist:
+                raise ValueError(f'Exercise with id {exercise_id} does not exist') from None
+
+            sets = ex_data.get('sets', [])
+            if not sets:
+                raise ValueError(f'Exercise {exercise.name} must have at least one set')
+
+            log = ExerciseLog.objects.create(
                 session=session,
-                exercise_id=ex_data['exercise_id'],
-                order_index=order_index,
+                exercise=exercise,
+                order_index=i,
             )
 
-            for set_number, set_data in enumerate(ex_data['sets'], start=1):
+            for j, set_data in enumerate(sets):
                 SetLog.objects.create(
-                    exercise_log=exercise_log,
-                    set_number=set_number,
+                    exercise_log=log,
+                    set_number=j + 1,
                     weight=set_data['weight'],
                     reps=set_data['reps'],
                 )
 
     return session
+
+
+def delete_session(session_id, user):
+    session = WorkoutSession.objects.get(id=session_id, user=user)
+    session.delete()
