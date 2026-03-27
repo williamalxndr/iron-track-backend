@@ -3,33 +3,35 @@ from datetime import date, timedelta
 from django.db.models import F, FloatField, Sum
 from django.db.models.functions import TruncWeek
 
-from apps.workout.models import SetLog, WorkoutSession
+from apps.workout.models import SetLog, WorkoutSession  # type: ignore
 
 
-def get_all_sessions():
+def get_all_sessions(user):
     return (
-        WorkoutSession.objects.all()
+        WorkoutSession.objects.filter(user=user)
         .annotate(
             total_volume=Sum(
-                F('exercise_logs__sets__weight') * F('exercise_logs__sets__reps'),
-                output_field=FloatField(),
+                F('exercise_logs__sets__weight') * F('exercise_logs__sets__reps'), output_field=FloatField()
             )
         )
         .order_by('-date')
     )
 
 
-def get_session_by_id(session_id):
-    return WorkoutSession.objects.get(id=session_id)
+def get_session_by_id(session_id, user):
+    return WorkoutSession.objects.get(id=session_id, user=user)
 
 
-def get_dashboard_stats(timespan):
+def get_dashboard_stats(timespan, user):
     days_map = {'1W': 7, '1M': 30, '3M': 90}
     days = days_map.get(timespan, 30)
     since = date.today() - timedelta(days=days)
 
-    sets_in_range = SetLog.objects.filter(exercise_log__session__date__gte=since)
-    sessions_in_range = WorkoutSession.objects.filter(date__gte=since)
+    sets_in_range = SetLog.objects.filter(
+        exercise_log__session__user=user,
+        exercise_log__session__date__gte=since,
+    )
+    sessions_in_range = WorkoutSession.objects.filter(user=user, date__gte=since)
 
     # 1. Volume by muscle category
     volume_by_category = list(
@@ -45,7 +47,6 @@ def get_dashboard_stats(timespan):
     session_count = sessions_in_range.count()
 
     # 4. Average volume by plan type
-    # Two-step: first get per-session volumes, then average by plan type
     sessions_with_volume = (
         sessions_in_range.filter(plan__isnull=False)
         .annotate(
@@ -56,7 +57,7 @@ def get_dashboard_stats(timespan):
         )
         .values('plan__type', 'session_volume')
     )
-    plan_type_totals = {}
+    plan_type_totals: dict[str, list[float]] = {}
     for row in sessions_with_volume:
         pt = row['plan__type']
         vol = row['session_volume'] or 0
