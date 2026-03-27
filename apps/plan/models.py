@@ -1,12 +1,24 @@
+from django.conf import settings
 from django.db import models
 
 
 class Plan(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='plans',
+    )
     name = models.CharField(max_length=255)
     type = models.CharField(max_length=20)  # PUSH / PULL / LEG / FULL_BODY
+    is_template = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'plan'
+        indexes = [
+            models.Index(fields=['user'], name='idx_plan_user'),
+        ]
 
     def __str__(self):
         return self.name
@@ -38,10 +50,21 @@ class PlanExercise(models.Model):
 
 
 class PlanWeekly(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='weekly_plans',
+    )
     name = models.CharField(max_length=255)
+    is_template = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'plan_weekly'
+        indexes = [
+            models.Index(fields=['user'], name='idx_plan_weekly_user'),
+        ]
 
     def __str__(self):
         return self.name
